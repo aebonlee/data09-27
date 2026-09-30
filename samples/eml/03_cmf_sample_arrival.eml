@@ -1,0 +1,30 @@
+MIME-Version: 1.0
+From: =?UTF-8?B?7ZiR66Cl7IKsIENNRiDri7Tri7ko6rCA7IOBKQ==?= <vendor.cmf@example.com>
+To: =?UTF-8?B?67O06rOg7J6QKOqwgOyDgSk=?= <me@example.com>
+Cc: =?UTF-8?B?65SU7J6Q7J247YyA7J6lKOqwgOyDgSk=?= <lead@example.com>
+Date: Wed, 23 Sep 2026 14:05:00 +0900
+Subject: =?UTF-8?B?W0NNRiDsg5jtlIwg7Y+J6rCAXSDsg4nsg4Eg7IOY7ZSMIOyeheqzoA==?=
+ =?UTF-8?B?IOuwjyDtj4nqsIAg7J287KCVIOyViOuCtA==?=
+Message-ID: <cmf-001@example.com>
+Content-Type: multipart/mixed; boundary="MIX-e3"
+
+--MIX-e3
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+=EC=95=88=EB=85=95=ED=95=98=EC=84=B8=EC=9A=94, =ED=98=91=EB=A0=A5=EC=82=AC =
+CMF =EB=8B=B4=EB=8B=B9(=EA=B0=80=EC=83=81)=EC=9E=85=EB=8B=88=EB=8B=A4.
+=EC=83=89=EC=83=81 =EC=83=98=ED=94=8C 12=EC=A2=85 =EC=9E=85=EA=B3=A0 =EC=99=
+=84=EB=A3=8C=ED=96=88=EC=8A=B5=EB=8B=88=EB=8B=A4.
+=ED=8F=89=EA=B0=80=EB=8A=94 =EB=8B=A4=EC=9D=8C =EC=A3=BC =ED=99=94=EC=9A=94=
+=EC=9D=BC(9/29)=EC=97=90 =EC=A7=84=ED=96=89=ED=95=A0 =EC=98=88=EC=A0=95=EC=
+=9E=85=EB=8B=88=EB=8B=A4.
+=EC=83=98=ED=94=8C =EB=AA=A9=EB=A1=9D=EC=9D=80 =EC=B2=A8=EB=B6=80 =ED=8C=8C=
+=EC=9D=BC=EC=9D=84 =EB=B4=90 =EC=A3=BC=EC=84=B8=EC=9A=94.
+--MIX-e3
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename*=UTF-8''CMF_%EC%83%98%ED%94%8C%EB%AA%A9%EB%A1%9D.xlsx
+Content-Transfer-Encoding: base64
+
+6rCA7IOBIOyyqOu2gCDigJQg7Iuk7KCcIOyXkeyFgCDrgrTsmqkg7JWE64uY
+--MIX-e3--

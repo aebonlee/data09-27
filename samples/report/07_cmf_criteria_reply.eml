@@ -1,0 +1,23 @@
+MIME-Version: 1.0
+From: =?UTF-8?B?67O06rOg7J6QKOqwgOyDgSk=?= <me@example.com>
+To: =?UTF-8?B?65SU7J6Q7J247YyA7J6lKOqwgOyDgSk=?= <lead@example.com>
+Date: Sat, 26 Sep 2026 17:10:00 +0900
+Subject: =?UTF-8?B?UkU6IFtDTUYg7IOY7ZSMIO2PieqwgF0g7Y+J6rCAIOq4sOykgO2RnA==?=
+Message-ID: <cmf-002@example.com>
+In-Reply-To: <cmf-000@example.com>
+Content-Type: multipart/mixed; boundary="MIX-e7"
+
+--MIX-e7
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+7Y+J6rCAIOq4sOykgO2RnCDstIjslYgg7J6R7ISxIOyZhOujjO2WiOyKteuLiOuLpC4NCuywqOyj
+vCDtj4nqsIAg7ZqM7J2Y7JeQ7IScIOq4sOykgOydhCDtmZXsoJXtlaAg7JiI7KCV7J6F64uI64uk
+Lg0K
+--MIX-e7
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+Content-Disposition: attachment; filename="=?UTF-8?B?7Y+J6rCA6riw7KSA7ZGcX+y0iOyViC5kb2N4?="
+Content-Transfer-Encoding: base64
+
+6rCA7IOBIOyyqOu2gA==
+--MIX-e7--

@@ -1,0 +1,9 @@
+# 예시 메일은 CRLF 바이트 그대로 보관한다 — js/report-sample.js 와 바이트가 같아야 테스트가 통과한다
+samples/eml/*.eml -text
+test/fixtures/*.eml -text
+# Windows 에서 돌리는 파일은 CRLF 로 (메모장·PowerShell 5.1 · cmd 가 줄바꿈을 제대로 읽게)
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+collector/*.txt text eol=crlf
+# 예시 수집 결과(첨부 원본 포함)는 바이트 그대로
+samples/collect/** -text

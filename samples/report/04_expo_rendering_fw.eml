@@ -1,0 +1,30 @@
+MIME-Version: 1.0
+From: =?UTF-8?B?67O06rOg7J6QKOqwgOyDgSk=?= <me@example.com>
+To: =?UTF-8?B?7KCE7IucIOyatOyYgSDri7Tri7ko6rCA7IOBKQ==?= <expo@example.com>
+Date: Thu, 24 Sep 2026 11:20:00 +0900
+Subject: =?UTF-8?B?Rlc6IFvsoITsi5ztmowg7KSA67mEXSDrtoDsiqQg66CM642U66eBIOyalOyyrQ==?=
+Message-ID: <expo-002@example.com>
+Content-Type: multipart/mixed; boundary="MIX-e4"
+
+--MIX-e4
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: base64
+
+67aA7IqkIOugjOuNlOungSDsnbTrr7jsp4AgNey7t+ydhCDsoJzstpztlojsirXri4jri6QuDQrr
+s7TsmYQg7JqU7LKt7J20IOyeiOycvOuptCDquIjsmpTsnbzquYzsp4Ag67CY7JiB7ZWY6rKg7Iq1
+64uI64ukLg0KDQotLS0tLS0tLS0tIEZvcndhcmRlZCBtZXNzYWdlIC0tLS0tLS0tLQ0KRnJvbTog
+7KCE7IucIOyatOyYgSDri7Tri7ko6rCA7IOBKQ0K67aA7IqkIOugjOuNlOungSDsmpTssq3rk5zr
+pr3ri4jri6QuIOuLpOydjCDso7wg7KSR7Jy866GcIDXsu7cg67aA7YOB65Oc66a964uI64ukLg0K
+--MIX-e4
+Content-Type: application/pdf; name="=?UTF-8?B?67aA7IqkX+ugjOuNlOungV817Lu3LnBkZg==?="
+Content-Disposition: attachment
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQg6rCA7IOBIOyyqOu2gA==
+--MIX-e4
+Content-Type: image/png; name="booth_front.png"
+Content-Disposition: attachment; filename="booth_front.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgo=
+--MIX-e4--

@@ -1,0 +1,34 @@
+MIME-Version: 1.0
+From: =?UTF-8?B?65SU7J6Q7J247YyA7J6lKOqwgOyDgSk=?= <lead@example.com>
+To: =?UTF-8?B?67O06rOg7J6QKOqwgOyDgSk=?= <me@example.com>
+Date: Mon, 21 Sep 2026 09:12:00 +0900
+Subject: =?UTF-8?B?W+y6oSDsnbjthYzrpqzslrQg6rCc7ISgXSAx7LCoIOyLnOyViCDqsoDthqAg7ZqM7J2YIOqysOqzvCDqs7XsnKA=?=
+Message-ID: <cab-001@example.com>
+Content-Type: multipart/alternative; boundary="ALT-e1"
+
+--ALT-e1
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: base64
+
+7JWI64WV7ZWY7IS47JqULg0K7Jik64qYIDHssKgg7Iuc7JWIIOqygO2GoCDtmozsnZjrpbwg66eI
+7LOk7Iq164uI64ukLg0K7Iuc7JWIIDPsooUg6rKA7YagIOyZhOujjO2WiOqzoCwgQuyViOydhCDs
+tZzsooUg7Iuc7JWI7Jy866GcIOyEoOygle2WiOyKteuLiOuLpC4NCuywqOyjvOyXkOuKlCBC7JWI
+IOq4sOykgOycvOuhnCAzRCDrqqjrjbjrp4Eg7JeF642w7J207Yq466W8IOynhO2Wie2VoCDsmIjs
+oJXsnoXri4jri6QoMTAvMuq5jOyngCkuDQrtmozsnZjroZ3snYAg67O466y47Jy866GcIOuMgOyL
+oO2VqeuLiOuLpC4NCg0K65SU7J6Q7J247YyA7J6lKOqwgOyDgSkg65Oc66a8
+--ALT-e1
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html><body><p>=EC=95=88=EB=85=95=ED=95=98=EC=84=B8=EC=9A=94.</p>
+<p>=EC=98=A4=EB=8A=98 1=EC=B0=A8 =EC=8B=9C=EC=95=88 =EA=B2=80=ED=86=A0 =ED=
+=9A=8C=EC=9D=98=EB=A5=BC =EB=A7=88=EC=B3=A4=EC=8A=B5=EB=8B=88=EB=8B=A4.<br>=
+=EC=8B=9C=EC=95=88 3=EC=A2=85 =EA=B2=80=ED=86=A0 =EC=99=84=EB=A3=8C=ED=96=
+=88=EA=B3=A0, <b>B=EC=95=88</b>=EC=9D=84 =EC=B5=9C=EC=A2=85 =EC=8B=9C=EC=95=
+=88=EC=9C=BC=EB=A1=9C =EC=84=A0=EC=A0=95=ED=96=88=EC=8A=B5=EB=8B=88=EB=8B=
+=A4.</p>
+<p>=EC=B0=A8=EC=A3=BC=EC=97=90=EB=8A=94 B=EC=95=88 =EA=B8=B0=EC=A4=80=EC=9C=
+=BC=EB=A1=9C 3D =EB=AA=A8=EB=8D=B8=EB=A7=81 =EC=97=85=EB=8D=B0=EC=9D=B4=ED=
+=8A=B8=EB=A5=BC =EC=A7=84=ED=96=89=ED=95=A0 =EC=98=88=EC=A0=95=EC=9E=85=EB=
+=8B=88=EB=8B=A4(10/2=EA=B9=8C=EC=A7=80).</p></body></html>
+--ALT-e1--

@@ -1,0 +1,317 @@
+window.P27_COLLECT = {
+ "schema": "p27-collect-v1",
+ "tool": "data09-27 scripts/make-samples.js (가상 예시 — 수집기 출력과 같은 모양)",
+ "generatedAt": "2026-09-25 18:00",
+ "computer": "EXAMPLE-PC",
+ "period": {
+  "type": "weekly",
+  "start": "2026-09-21",
+  "end": "2026-09-27",
+  "weekStart": 1,
+  "label": "2026-09-21 ~ 2026-09-27"
+ },
+ "stores": [
+  {
+   "name": "me@example.com (가상)",
+   "kind": "online",
+   "path": "C:\\Users\\user\\AppData\\Local\\Microsoft\\Outlook\\me@example.com (가상).ost",
+   "folders": 9,
+   "mails": 5,
+   "added": false
+  },
+  {
+   "name": "Mail backup (가상)",
+   "kind": "pst",
+   "path": "D:\\메일백업(가상)\\Mail backup.pst",
+   "folders": 24,
+   "mails": 2,
+   "added": false
+  }
+ ],
+ "skippedFolders": [
+  "\\\\me@example.com (가상)\\지운 편지함",
+  "\\\\me@example.com (가상)\\정크 메일",
+  "\\\\me@example.com (가상)\\임시 보관함",
+  "\\\\Mail backup (가상)\\지운 편지함"
+ ],
+ "duplicates": 1,
+ "warnings": [],
+ "mails": [
+  {
+   "id": "M0001",
+   "store": "me@example.com (가상)",
+   "storeKind": "online",
+   "folder": "받은 편지함\\캡 인테리어",
+   "direction": "received",
+   "messageId": "cab-101@example.com",
+   "inReplyTo": "",
+   "references": [],
+   "from": {
+    "name": "디자인팀장(가상)",
+    "email": "lead@example.com"
+   },
+   "to": [
+    {
+     "name": "보고자(가상)",
+     "email": "me@example.com"
+    }
+   ],
+   "cc": [],
+   "sentAt": "2026-09-21T00:12:00.000Z",
+   "day": "2026-09-21",
+   "time": "09:12",
+   "subject": "[캡 인테리어 개선] 1차 시안 검토 회의 결과 공유",
+   "body": "안녕하세요.\r\n오늘 1차 시안 검토 회의를 마쳤습니다.\r\n시안 3종 검토 완료했고, B안을 최종 시안으로 선정했습니다.\r\n차주에는 B안 기준으로 3D 모델링 업데이트를 진행할 예정입니다(10/2까지).\r\n회의록과 B안 렌더링을 첨부합니다.\r\n\r\n디자인팀장(가상) 드림",
+   "attachments": [
+    {
+     "name": "캡_1차시안_검토회의록.docx",
+     "kind": "word",
+     "size": 37185,
+     "file": "att/M0001/캡_1차시안_검토회의록.docx",
+     "extract": "ok",
+     "text": "캡 인테리어 개선 — 1차 시안 검토 회의록 (가상)\n일시 | 2026-09-21 09:00\n참석 | 디자인팀장(가상), 보고자(가상), 설계 담당(가상)\n안건 | 1차 시안 3종 비교 & 최종안 선정\n결정 사항\nB안 최종 시안 선정 완료.\n조작부 버튼 배열은 협력사 치수 회신 후 확정할 예정입니다.\n이슈\n협력사 조작부 치수 회신이 지연되고 있어 확인이 필요합니다.\n다음 할 일\n3D 모델링 업데이트\t10/2까지",
+     "note": ""
+    },
+    {
+     "name": "B안_렌더링_정면.png",
+     "kind": "image",
+     "size": 29693,
+     "file": "att/M0001/B안_렌더링_정면.png",
+     "extract": "meta",
+     "text": "",
+     "note": "그림 — 이름 · 크기만(글자 읽기는 2단계)"
+    }
+   ]
+  },
+  {
+   "id": "M0002",
+   "store": "me@example.com (가상)",
+   "storeKind": "online",
+   "folder": "보낸 편지함",
+   "direction": "sent",
+   "messageId": "cab-102@example.com",
+   "inReplyTo": "cab-101@example.com",
+   "references": [
+    "cab-101@example.com"
+   ],
+   "from": {
+    "name": "보고자(가상)",
+    "email": "me@example.com"
+   },
+   "to": [
+    {
+     "name": "디자인팀장(가상)",
+     "email": "lead@example.com"
+    }
+   ],
+   "cc": [],
+   "sentAt": "2026-09-22T01:30:00.000Z",
+   "day": "2026-09-22",
+   "time": "10:30",
+   "subject": "RE: [캡 인테리어 개선] 1차 시안 검토 회의 결과 공유",
+   "body": "팀장님, B안 기준으로 3D 모델링 업데이트에 착수했습니다.\r\n다만 조작부 치수 자료가 아직 오지 않아 협력사에 다시 요청했습니다.\r\n\r\n-----Original Message-----\r\nFrom: 디자인팀장(가상)\r\n오늘 1차 시안 검토 회의를 마쳤습니다.",
+   "attachments": []
+  },
+  {
+   "id": "M0003",
+   "store": "Mail backup (가상)",
+   "storeKind": "pst",
+   "folder": "2026\\CMF 샘플",
+   "direction": "received",
+   "messageId": "cmf-201@example.com",
+   "inReplyTo": "",
+   "references": [],
+   "from": {
+    "name": "협력사 CMF 담당(가상)",
+    "email": "vendor.cmf@example.com"
+   },
+   "to": [
+    {
+     "name": "보고자(가상)",
+     "email": "me@example.com"
+    }
+   ],
+   "cc": [],
+   "sentAt": "2026-09-23T05:05:00.000Z",
+   "day": "2026-09-23",
+   "time": "14:05",
+   "subject": "[CMF 샘플 평가] 샘플 입고 및 평가표 송부",
+   "body": "안녕하세요, 협력사 CMF 담당(가상)입니다.\r\nCMF 샘플 5종이 입고되었습니다. 평가표를 첨부드립니다.\r\n색상 샘플 2종은 재도장이 필요해 9/30까지 재입고할 예정입니다.",
+   "attachments": [
+    {
+     "name": "CMF_샘플_평가표.xlsx",
+     "kind": "excel",
+     "size": 5800,
+     "file": "att/M0003/CMF_샘플_평가표.xlsx",
+     "extract": "ok",
+     "text": "[시트 평가표]\n번호 | 샘플 | 색차(ΔE) | 판정 | 비고\n1 | 딥블루 무광 | 0.8 | 합격\n2 | 딥블루 유광 | 1.1 | 합격\n3 | 웜그레이 | 2.9 | 재도장 필요 | 기준 2.0 초과\n4 | 쿨그레이 | 1.4 | 합격\n5 | 옐로 포인트 | 3.2 | 재도장 필요 | 기준 2.0 초과\n[시트 일정]\n항목 | 일자\n재도장 샘플 재입고 예정 | 2026-09-30\n평가 완료 목표 | 2026-10-02",
+     "note": ""
+    }
+   ]
+  },
+  {
+   "id": "M0004",
+   "store": "Mail backup (가상)",
+   "storeKind": "pst",
+   "folder": "보낸 편지함",
+   "direction": "sent",
+   "messageId": "cmf-202@example.com",
+   "inReplyTo": "cmf-201@example.com",
+   "references": [
+    "cmf-201@example.com"
+   ],
+   "from": {
+    "name": "보고자(가상)",
+    "email": "me@example.com"
+   },
+   "to": [
+    {
+     "name": "협력사 CMF 담당(가상)",
+     "email": "vendor.cmf@example.com"
+    }
+   ],
+   "cc": [],
+   "sentAt": "2026-09-24T00:40:00.000Z",
+   "day": "2026-09-24",
+   "time": "09:40",
+   "subject": "RE: [CMF 샘플 평가] 샘플 입고 및 평가표 송부",
+   "body": "평가표 검토했습니다.\r\n합격 3종은 평가 완료로 정리했습니다.\r\n재도장 2종은 입고되면 바로 평가하겠습니다.",
+   "attachments": []
+  },
+  {
+   "id": "M0005",
+   "store": "me@example.com (가상)",
+   "storeKind": "online",
+   "folder": "보낸 편지함",
+   "direction": "sent",
+   "messageId": "expo-301@example.com",
+   "inReplyTo": "",
+   "references": [],
+   "from": {
+    "name": "보고자(가상)",
+    "email": "me@example.com"
+   },
+   "to": [
+    {
+     "name": "전시 운영 담당(가상)",
+     "email": "expo@example.com"
+    }
+   ],
+   "cc": [
+    {
+     "name": "디자인팀장(가상)",
+     "email": "lead@example.com"
+    }
+   ],
+   "sentAt": "2026-09-24T07:20:00.000Z",
+   "day": "2026-09-24",
+   "time": "16:20",
+   "subject": "[전시회 준비] 부스 렌더링 v2 배포",
+   "body": "전시 부스 렌더링 v2를 배포합니다.\r\n조명 위치를 조정했고 관람 동선 안을 반영했습니다.\r\n의견은 9/29까지 회신 부탁드립니다.",
+   "attachments": [
+    {
+     "name": "전시부스_렌더링_v2.pptx",
+     "kind": "ppt",
+     "size": 30247,
+     "file": "att/M0005/전시부스_렌더링_v2.pptx",
+     "extract": "ok",
+     "text": "[슬라이드 1]\n전시 부스 렌더링 v2 (가상)\n배포일: 2026-09-24\n[슬라이드 2]\n주요 변경\n조명 위치 조정 완료\n관람 동선 안 반영 완료\n[슬라이드 3]\n남은 일\n부스 그래픽 시안 확정 예정(10/5)",
+     "note": ""
+    },
+    {
+     "name": "부스_투시도_v2.png",
+     "kind": "image",
+     "size": 29336,
+     "file": "att/M0005/부스_투시도_v2.png",
+     "extract": "meta",
+     "text": "",
+     "note": "그림 — 이름 · 크기만(글자 읽기는 2단계)"
+    },
+    {
+     "name": "로고_시안_B안.ai",
+     "kind": "illustrator",
+     "size": 34251,
+     "file": "att/M0005/로고_시안_B안.ai",
+     "extract": "browser",
+     "text": "",
+     "note": ""
+    }
+   ]
+  },
+  {
+   "id": "M0006",
+   "store": "me@example.com (가상)",
+   "storeKind": "online",
+   "folder": "받은 편지함\\캡 인테리어",
+   "direction": "received",
+   "messageId": "cab-103@example.com",
+   "inReplyTo": "",
+   "references": [
+    "cab-101@example.com"
+   ],
+   "from": {
+    "name": "협력사 설계 담당(가상)",
+    "email": "vendor.design@example.com"
+   },
+   "to": [
+    {
+     "name": "보고자(가상)",
+     "email": "me@example.com"
+    }
+   ],
+   "cc": [],
+   "sentAt": "2026-09-25T02:00:00.000Z",
+   "day": "2026-09-25",
+   "time": "11:00",
+   "subject": "[캡 인테리어 개선] 조작부 치수 도면 회신",
+   "body": "요청하신 조작부 치수 도면을 첨부합니다.\r\n버튼 간격은 기존보다 2mm 넓어졌습니다.\r\n최종 확정은 내부 검토 후 10/1까지 알려 드리겠습니다.",
+   "attachments": [
+    {
+     "name": "조작부_치수도면_Rev2.pdf",
+     "kind": "pdf",
+     "size": 51847,
+     "file": "att/M0006/조작부_치수도면_Rev2.pdf",
+     "extract": "browser",
+     "text": "",
+     "note": ""
+    },
+    {
+     "name": "이전_회의록.doc",
+     "kind": "old-office",
+     "size": 20480,
+     "file": "att/M0006/이전_회의록.doc",
+     "extract": "unsupported",
+     "text": "",
+     "note": "옛 Office · 한글 파일은 1단계에서 글을 뽑지 않음(2단계)"
+    }
+   ]
+  },
+  {
+   "id": "M0007",
+   "store": "me@example.com (가상)",
+   "storeKind": "online",
+   "folder": "받은 편지함",
+   "direction": "received",
+   "messageId": "team-401@example.com",
+   "inReplyTo": "",
+   "references": [],
+   "from": {
+    "name": "팀 공지(가상)",
+    "email": "team@example.com"
+   },
+   "to": [
+    {
+     "name": "보고자(가상)",
+     "email": "me@example.com"
+    }
+   ],
+   "cc": [],
+   "sentAt": "2026-09-25T08:30:00.000Z",
+   "day": "2026-09-25",
+   "time": "17:30",
+   "subject": "[팀 공지] 주간 회의 일정 안내",
+   "body": "다음 주 주간 회의는 10/1(수) 10시에 진행할 예정입니다.",
+   "attachments": []
+  }
+ ]
+};
