@@ -1,0 +1,102 @@
+{
+ "schema": "p27-report-file-v1",
+ "tool": "data09-27 업무보고 Agent",
+ "level": "팀원",
+ "author": "김가상",
+ "unit": "A파트(가상)",
+ "type": "weekly",
+ "period": {
+  "type": "weekly",
+  "start": "2026-09-21",
+  "end": "2026-09-27",
+  "label": "2026-09-21 ~ 2026-09-27",
+  "next": {
+   "start": "2026-09-28",
+   "end": "2026-10-04",
+   "label": "2026-09-28 ~ 2026-10-04"
+  }
+ },
+ "approved": "2026-09-25 17:20",
+ "generatedAt": "2026-09-25 17:25",
+ "boardStyle": "brief",
+ "rollup": false,
+ "sources": [],
+ "summary": [
+  "가상 요약"
+ ],
+ "counts": {
+  "performance": 1,
+  "plan": 1,
+  "issue": 1,
+  "check": 0
+ },
+ "items": [
+  {
+   "category": "실적",
+   "project": "캡",
+   "text": "B안 최종 시안 선정",
+   "status": "완료",
+   "date": "",
+   "decision": false,
+   "explicit": true,
+   "origin": "rule",
+   "source": "",
+   "conflict": "",
+   "evidence": [
+    "M0001"
+   ],
+   "reporter": ""
+  },
+  {
+   "category": "계획",
+   "project": "캡",
+   "text": "3D 모델링 업데이트 진행 예정",
+   "status": "예정",
+   "date": "2026-10-02",
+   "decision": false,
+   "explicit": true,
+   "origin": "rule",
+   "source": "",
+   "conflict": "",
+   "evidence": [
+    "M0001"
+   ],
+   "reporter": ""
+  },
+  {
+   "category": "이슈",
+   "project": "캡",
+   "text": "협력사 치수 회신 지연",
+   "status": "지연",
+   "date": "",
+   "decision": false,
+   "explicit": true,
+   "origin": "rule",
+   "source": "",
+   "conflict": "",
+   "evidence": [
+    "M0002"
+   ],
+   "reporter": ""
+  }
+ ],
+ "evidence": [
+  {
+   "id": "M0001",
+   "day": "2026-09-21",
+   "time": "09:12",
+   "from": "협력사(가상)",
+   "subject": "[캡] 1차 시안 회의",
+   "attachments": []
+  },
+  {
+   "id": "M0002",
+   "day": "2026-09-22",
+   "time": "10:30",
+   "from": "협력사(가상)",
+   "subject": "RE: [캡] 치수",
+   "attachments": []
+  }
+ ],
+ "board": null
+}

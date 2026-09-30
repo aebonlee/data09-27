@@ -191,6 +191,19 @@ function Read-TextFileSmart([string]$path) {
   catch { try { return [System.Text.Encoding]::GetEncoding(949).GetString($bytes) } catch { return [System.Text.Encoding]::UTF8.GetString($bytes) } }
 }
 
+# ── 업무보고 파일(.json) 알아보기 — 2026-09-30 답변 「보고서 파일은 메일로 송/수신」 ──
+<# 받은 메일의 첨부 .json 중 이 도구가 만든 보고서 파일(형식 표시 "schema": "p27-report-file-v1")만 골라 그 글을 돌려줍니다.
+   다른 .json(다른 프로그램의 설정 · 데이터)은 $null. 규칙은 js/rollup-logic.js 의 looksLikePackageText 와 같습니다(앞 4096자에서 찾음). #>
+$Script:ReportMarker = '"schema"\s*:\s*"p27-report-file-v1"'
+function Get-ReportPackageText([string]$path, [int64]$maxBytes = 5MB) {
+  if ([IO.Path]::GetExtension($path).ToLower() -ne '.json') { return $null }
+  if ((Get-Item -LiteralPath $path).Length -gt $maxBytes) { return $null }
+  $t = Read-TextFileSmart $path
+  $head = $t; if ($head.Length -gt 4096) { $head = $head.Substring(0, 4096) }
+  if ($head -match $Script:ReportMarker) { return $t }
+  return $null
+}
+
 # ── 보고 기간 (js/report-logic.js 의 periodFor 와 같은 계산) ──
 <# $mode = weekly | monthly, $which = this | last, $weekStart = 1(월) | 0(일) #>
 function Get-ReportPeriod([string]$mode, [datetime]$refDay, [string]$which = 'this', [int]$weekStart = 1) {

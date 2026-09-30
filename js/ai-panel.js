@@ -33,7 +33,8 @@
     var preset = h('select', { 'aria-label': '서버 종류' });
     E.PRESETS.forEach(function (p) { preset.appendChild(h('option', { value: p.id }, p.label)); });
     var urlIn = h('input', { value: cfg.baseUrl, placeholder: '예: https://llm.사내도메인/v1', autocomplete: 'off', spellcheck: 'false' });
-    var modelIn = h('input', { value: cfg.model, placeholder: '예: 서버에 올라간 모델 이름', autocomplete: 'off', spellcheck: 'false' });
+    var modelIn = h('input', { value: cfg.model, placeholder: '예: ' + E.DEFAULT_MODEL + ' (서버에 올라간 모델 이름 그대로)', autocomplete: 'off', spellcheck: 'false', list: 'aiModelList' });
+    var modelList = h('datalist', { id: 'aiModelList' });
     var keyIn = h('input', { type: 'password', value: cfg.apiKey, placeholder: '사내 서버가 키를 요구하지 않으면 비워 두세요', autocomplete: 'off' });
     var remember = h('input', { type: 'checkbox' }); remember.checked = cfg.remember;
     var status = h('div', { class: 'note', 'aria-live': 'polite' });
@@ -51,9 +52,9 @@
     function saveNow() {
       var c = read(), v = E.validateConfig(c, location.protocol);
       show(v);
-      if (v.errors.length && (c.baseUrl || c.model)) { if (opts.toast) opts.toast('설정을 확인해 주세요.', true); return; }
+      if (v.errors.length && c.baseUrl) { if (opts.toast) opts.toast('설정을 확인해 주세요.', true); return; }
       E.save(c); cfg = c;
-      if (opts.toast) opts.toast(E.isReady(c) ? '저장했습니다. 「설정한 AI 서버로 보내기」 버튼을 쓸 수 있습니다.' : '비웠습니다. 반자동(복사·붙여 넣기)만 씁니다.');
+      if (opts.toast) opts.toast(E.isReady(c) ? '저장했습니다. 「설정한 AI 서버로 보내기」 버튼을 쓸 수 있습니다.' : '주소가 비어 있어 반자동(복사·붙여 넣기)만 씁니다. 사내 LLM 주소를 받으면 적고 다시 저장해 주세요.');
       if (opts.onChange) opts.onChange();
     }
     function testNow() {
@@ -61,9 +62,25 @@
       show(v);
       if (v.errors.length) return;
       status.appendChild(h('p', { class: 'note' }, '연결 확인 중…'));
-      E.callChat(c, E.promptMessages('연결 확인입니다. 「확인」이라고만 답해줘.'), { maxTokens: 20 }).then(function (t) {
+      E.callChat(c, E.promptMessages('연결 확인입니다. 「확인」이라고만 답해줘.'), { maxTokens: 512 }).then(function (t) {   // 생각하는 모델(Qwen3)은 <think> 에 먼저 글자를 써서 20 이면 답이 잘림
         status.lastChild.textContent = '연결됨 — 서버 답: ' + t.slice(0, 80);
       }, function (e) { status.lastChild.textContent = e.message; status.lastChild.className = 'alert warn'; });
+    }
+    /* 모델 목록 불러오기 — 서버에 올라간 정확한 이름 확인(qwen3.8 · qwen3:8b 처럼 표기가 다를 수 있음) */
+    function modelsNow() {
+      var c = read(), v = E.validateConfig(c, location.protocol);
+      var errs = v.errors.filter(function (e) { return e.indexOf('모델') < 0; });
+      if (errs.length) { show({ errors: errs, warnings: [] }); return; }
+      show({ errors: [], warnings: [] });
+      status.appendChild(h('p', { class: 'note' }, '모델 목록을 불러오는 중…'));
+      E.callModels(c).then(function (list) {
+        modelList.innerHTML = ''; list.forEach(function (m) { modelList.appendChild(h('option', { value: m })); });
+        var mm = E.matchModel(c.model, list), line = status.lastChild;
+        if (!list.length) { line.textContent = '서버가 모델 목록을 비워서 보냈습니다. 모델 이름은 사내 LLM 담당에게 확인해 주세요.'; return; }
+        if (mm.exact) line.textContent = '서버 모델 ' + list.length + '개 — 적은 이름(' + c.model + ')이 목록에 있습니다.';
+        else if (mm.suggest) { modelIn.value = mm.suggest; line.textContent = '서버에서는 「' + mm.suggest + '」로 올라가 있어 그 이름으로 바꿔 두었습니다. 「저장」을 눌러 주세요.'; }
+        else line.textContent = '적은 이름(' + (c.model || '빈칸') + ')이 서버 목록에 없습니다. 모델 이름 칸을 눌러 목록에서 골라 주세요: ' + list.slice(0, 8).join(', ') + (list.length > 8 ? ' …' : '');
+      }, function (e) { status.lastChild.textContent = e.message + ' (목록을 막아 둔 서버도 있습니다 — 그때는 이름을 직접 적어 주세요)'; status.lastChild.className = 'alert warn'; });
     }
     return h('section', { class: 'card', id: 'aiSettings' }, h('h2', null, 'AI 연결 설정 (사내 LLM 권장 — 자동 보내기)'),
       h('p', { class: 'note' }, '회사에 사내 LLM 이 있으면 이 방법을 권합니다. 메일 내용이 사내망 밖으로 나가지 않습니다. ' +
@@ -73,15 +90,17 @@
       h('div', { class: 'form-grid' },
         fld('서버 종류', preset),
         fld('AI 서버 주소(Base URL)', urlIn, '…/v1 까지. /chat/completions 는 도구가 붙입니다.'),
-        fld('모델 이름', modelIn),
+        fld('모델 이름', [modelIn, modelList], '사내 LLM 은 ' + E.DEFAULT_MODEL + ' 로 들었습니다. 서버의 정확한 표기는 「모델 목록 불러오기」로 확인합니다.'),
         fld('키(선택)', keyIn, '비우면 인증 머리글을 보내지 않습니다.')),
       h('label', { class: 'opt', style: 'margin-top:8px' }, remember, h('span', null, h('span', { class: 't' }, '키를 이 브라우저에 기억(공용 PC 에서는 끄세요)'))),
       h('ul', { class: 'note' },
+        h('li', null, 'Qwen3 처럼 「생각하는 모드」가 있는 모델은 답 앞에 <think>…</think> 를 붙여 보낼 수 있습니다. 도구가 그 부분을 떼고 답만 씁니다.'),
         h('li', null, '보내는 곳은 위 주소 하나뿐입니다. 키는 리포·코드에 없고, 「기억」을 끄면 이 창을 닫을 때 사라집니다.'),
         h('li', null, '브라우저에서 바로 부르므로 서버가 CORS 를 허용해야 합니다. https 로 연 이 페이지에서는 http 주소를 쓸 수 없으니, 사내 서버가 http 라면 이 도구를 내 PC 에서 파일로 열어(file://) 써 주세요.')),
       h('div', { class: 'btn-row', style: 'margin-top:10px' },
         h('button', { type: 'button', class: 'btn btn-primary', onclick: saveNow }, '저장'),
         h('button', { type: 'button', class: 'btn', onclick: testNow }, '연결 확인'),
+        h('button', { type: 'button', class: 'btn', onclick: modelsNow }, '모델 목록 불러오기'),
         h('span', { class: 'note' }, '현재: ' + E.describe(cfg))),
       status);
   }

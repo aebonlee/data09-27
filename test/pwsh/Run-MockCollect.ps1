@@ -16,10 +16,13 @@
   Online 사서함은 수집설정.txt 의 Online폴더 대로 읽는지도 봅니다(-OnlineScope — 기본 받은보낸 = 받은 · 보낸 편지함만).
   두 번째 회사 계정은 기본 폴더 번호로 받은 편지함을 못 찾게 만들어, 이름으로 다시 찾는 길도 시험합니다.
 
-  실행: pwsh -NoProfile -File test/pwsh/Run-MockCollect.ps1 [-Restrict ok|empty] [-OnlineScope 받은보낸|받은보낸하위|전체]
+  2026-09-30 「메일로 송/수신」: 팀원이 보낸 업무보고 파일(.json)과 다른 .json 이 첨부된 메일을 한 통 더 넣어,
+  업무보고 파일만 「report」로 표시되고 reports.js 에 글이 담기는지, 첨부저장=아니오(-KeepFiles 아니오)여도 그 파일은 남는지 봅니다.
+
+  실행: pwsh -NoProfile -File test/pwsh/Run-MockCollect.ps1 [-Restrict ok|empty] [-OnlineScope 받은보낸|받은보낸하위|전체] [-KeepFiles 예|아니오]
         (Windows PowerShell 5.1 에서는 클래스 문법 때문에 PowerShell 7 을 권합니다)
 #>
-param([ValidateSet('ok', 'empty')][string]$Restrict = 'empty', [ValidateSet('받은보낸', '받은보낸하위', '전체')][string]$OnlineScope = '받은보낸', [string]$OutDir = '', [switch]$Keep)
+param([ValidateSet('ok', 'empty')][string]$Restrict = 'empty', [ValidateSet('받은보낸', '받은보낸하위', '전체')][string]$OnlineScope = '받은보낸', [ValidateSet('예', '아니오')][string]$KeepFiles = '예', [string]$OutDir = '', [switch]$Keep)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $sample = Join-Path (Join-Path $root 'samples') 'collect'
@@ -124,6 +127,11 @@ $extra = Clone-Mail $tmpl @{ messageId = 'fwd-1@example.com'; subject = '[팀 �
 (Get-Sub $online2.Root '받은 편지함').Items.Add((New-Mail (Clone-Mail $tmpl @{ messageId = 'acc2-1@example.com'; subject = '두 번째 계정 받은 메일' })))
 (Get-Sub $online2.Root '받은 편지함').Items.Add((New-Mail (Clone-Mail $tmpl @{ messageId = 'acc2-old@example.com'; subject = '두 번째 계정 지난주 메일'; day = '2026-09-18' })))
 
+# 팀원이 보낸 업무보고 파일(.json) + 다른 프로그램의 .json — 업무보고 파일만 알아봐야 함
+$rmDir = Join-Path (Join-Path (Join-Path $root 'test') 'fixtures') 'report-mail'
+$rmMail = Clone-Mail $tmpl @{ messageId = 'report-1@example.com'; subject = '[주간보고] 김가상 09/21~09/27'; day = '2026-09-25'; time = '17:30'; from = [pscustomobject]@{ name = '김가상(가상)'; email = 'kim@example.com' } }
+(Get-Sub $online.Root '받은 편지함').Items.Add((New-Mail $rmMail 43 @((New-Att '주간업무보고_20260921_김가상.json' (Join-Path $rmDir '주간업무보고_20260921_김가상.json')), (New-Att '설정값.json' (Join-Path $rmDir '설정값.json')))))
+
 $ns = [pscustomobject]@{ Accounts = @([pscustomobject]@{ SmtpAddress = 'me@example.com' }); Stores = @($online, $pst, $public, $online2) }
 $ns | Add-Member -MemberType ScriptMethod -Name AddStoreEx -Value { param($p, $t) throw '시험에서는 .pst 를 열지 않습니다' }
 $ns | Add-Member -MemberType ScriptMethod -Name RemoveStore -Value { param($f) }
@@ -134,6 +142,8 @@ $settings = Join-Path ([IO.Path]::GetTempPath()) ('p27-set-' + [guid]::NewGuid()
 $setText = [IO.File]::ReadAllText((Join-Path $root 'collector/수집설정.txt'), [Text.Encoding]::UTF8)
 if ($setText -notmatch '(?m)^Online폴더=받은보낸\s*$') { throw '수집설정.txt 의 기본값이 Online폴더=받은보낸 이 아닙니다' }
 $setText = $setText -replace '(?m)^Online폴더=.*$', ('Online폴더=' + $OnlineScope)
+if ($setText -notmatch '(?m)^첨부저장=예\s*$') { throw '수집설정.txt 의 기본값이 첨부저장=예 가 아닙니다' }
+$setText = $setText -replace '(?m)^첨부저장=.*$', ('첨부저장=' + $KeepFiles)
 [IO.File]::WriteAllText($settings, $setText, [Text.Encoding]::UTF8)
 & (Join-Path $root 'collector/Collect-OutlookMail.ps1') -Mode weekly -Which this -RefDay 2026-09-24 -SettingsFile $settings -OutDir $OutDir -NoOpen -NoPause -MockNamespace $ns | Out-Host
 
@@ -141,10 +151,10 @@ $setText = $setText -replace '(?m)^Online폴더=.*$', ('Online폴더=' + $Online
 $script:pass = 0; $script:fail = 0
 function Check([bool]$ok, [string]$label) { if ($ok) { $script:pass++; Write-Host ('  ok   ' + $label) } else { $script:fail++; Write-Host ('  FAIL ' + $label) -ForegroundColor Red } }
 $out = [IO.File]::ReadAllText((Join-Path $OutDir 'manifest.json'), [Text.Encoding]::UTF8) | ConvertFrom-Json
-Write-Host ('[가짜 Outlook 수집 · Restrict=' + $Restrict + ' · Online폴더=' + $OnlineScope + '] 결과 대조')
+Write-Host ('[가짜 Outlook 수집 · Restrict=' + $Restrict + ' · Online폴더=' + $OnlineScope + ' · 첨부저장=' + $KeepFiles + '] 결과 대조')
 Check ($out.schema -eq 'p27-collect-v1' -and $out.period.start -eq '2026-09-21' -and $out.period.end -eq '2026-09-27') '형식 · 기간'
-# 예시 7 + 첨부 메일 1 + 두 번째 계정 1 = 9. 받은보낸하위 는 받은 편지함 하위 폴더 1통, 전체 는 거기에 다른 맨 위 폴더 1통을 더함
-$want = @{ '받은보낸' = 9; '받은보낸하위' = 10; '전체' = 11 }[$OnlineScope]
+# 예시 7 + 첨부 메일 1 + 두 번째 계정 1 + 업무보고 파일 메일 1 = 10. 받은보낸하위 는 받은 편지함 하위 폴더 1통, 전체 는 거기에 다른 맨 위 폴더 1통을 더함
+$want = @{ '받은보낸' = 10; '받은보낸하위' = 11; '전체' = 12 }[$OnlineScope]
 Check (@($out.mails).Count -eq $want) ('메일 ' + $want + '통 — 실제 ' + @($out.mails).Count)
 Check ($out.duplicates -eq 1) ('Online · .pst 같은 메일 한 번만 — ' + $out.duplicates)
 Check (@($out.stores).Count -eq 3) '공용 폴더 데이터 파일은 읽지 않음(Online 2 · .pst 1)'
@@ -174,6 +184,16 @@ foreach ($want in $man.mails) {
   Check $same ($want.id + ' 메일 칸(제목 · 본문 · 날짜 · 보낸/받은 · 위치 · 주소)')
   $ga = @($g.attachments); $wa = @($want.attachments)
   $ok = ($ga.Count -eq $wa.Count)
+  if ($KeepFiles -eq '아니오') {
+    # 첨부저장=아니오: 글은 그대로 뽑고 원본은 지움(PDF · 일러스트는 도구가 읽어야 해서 남김)
+    for ($i = 0; $ok -and $i -lt $wa.Count; $i++) {
+      $keepIt = ($wa[$i].extract -eq 'browser')
+      $ok = ($ga[$i].name -eq $wa[$i].name) -and ($ga[$i].extract -eq $wa[$i].extract) -and ([string]$ga[$i].text -ceq [string]$wa[$i].text) -and
+        ($(if ($keepIt) { $ga[$i].file -and (Test-Path -LiteralPath (Join-Path $OutDir $ga[$i].file)) } else { $ga[$i].file -eq '' }))
+    }
+    Check $ok ($want.id + ' 첨부 ' + $wa.Count + '개 — 글은 뽑고 원본은 지움(PDF · 일러스트만 남김)')
+    continue
+  }
   for ($i = 0; $ok -and $i -lt $wa.Count; $i++) {
     $ok = ($ga[$i].name -eq $wa[$i].name) -and ($ga[$i].kind -eq $wa[$i].kind) -and ($ga[$i].extract -eq $wa[$i].extract) -and ([string]$ga[$i].text -ceq [string]$wa[$i].text) -and
       ([string]$ga[$i].note -ceq [string]$wa[$i].note) -and ([int64]$ga[$i].size -eq [int64]$wa[$i].size) -and ((Split-Path $ga[$i].file -Leaf) -eq (Split-Path $wa[$i].file -Leaf)) -and
@@ -184,6 +204,15 @@ foreach ($want in $man.mails) {
 }
 $fw = @($out.mails | Where-Object { $_.subject -eq '[팀 공지] 참고 메일 전달' })[0]
 Check ($fw.attachments.Count -eq 1 -and $fw.attachments[0].kind -eq 'mail' -and $fw.attachments[0].file -eq '') '첨부 메일(.msg) — 이름만'
+$rm = @($out.mails | Where-Object { $_.subject -eq '[주간보고] 김가상 09/21~09/27' })[0]
+$ra = @($rm.attachments)
+Check ($ra.Count -eq 2) '업무보고 파일 메일 — 첨부 2개'
+Check ($ra[0].kind -eq 'report' -and $ra[0].extract -eq 'report' -and [string]$ra[0].text -eq '' -and $ra[0].file -and (Test-Path -LiteralPath (Join-Path $OutDir $ra[0].file))) ('업무보고 파일(.json) → report 표시 · 파일 남김(첨부저장=' + $KeepFiles + ')')
+Check ($ra[1].kind -eq 'other' -and $ra[1].extract -eq 'meta' -and (($KeepFiles -eq '아니오') -eq ($ra[1].file -eq ''))) ('다른 .json → 이름 · 크기만' + $(if ($KeepFiles -eq '아니오') { '(원본 지움)' } else { '' }))
+$repjs = [IO.File]::ReadAllText((Join-Path $OutDir 'reports.js'), [Text.Encoding]::UTF8)
+$repObj = ($repjs -replace '^window\.P27_REPORTS = ', '' -replace ';\s*$', '') | ConvertFrom-Json
+$repKeys = @($repObj.PSObject.Properties.Name)
+Check ($repjs.StartsWith('window.P27_REPORTS = {') -and $repKeys.Count -eq 1 -and $repKeys[0] -eq $ra[0].file -and (($repObj.($repKeys[0]) | ConvertFrom-Json).author -eq '김가상')) 'reports.js 에 업무보고 파일 글 1개(경로 = 첨부 file)'
 $pdfjs = [IO.File]::ReadAllText((Join-Path $OutDir 'pdfdata.js'), [Text.Encoding]::UTF8)
 Check ($pdfjs.StartsWith('window.P27_PDF = ') -and ($pdfjs -like '*조작부_치수도면_Rev2.pdf*') -and ($pdfjs -like '*로고_시안_B안.ai*')) 'pdfdata.js 에 PDF · 일러스트'
 $mjs = [IO.File]::ReadAllText((Join-Path $OutDir 'manifest.js'), [Text.Encoding]::UTF8)

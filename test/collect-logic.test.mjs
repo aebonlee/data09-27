@@ -5,7 +5,8 @@
 // Outlook 에 붙는 부분은 수강생 PC 에서 한 번 돌려 확인해야 한다(README 「처음 쓰는 법」 5단계).
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -13,6 +14,7 @@ const require = createRequire(import.meta.url);
 const L = require('../js/report-logic.js');
 const C = require('../js/collect-logic.js');
 const S = require('../js/sample-collect.js');
+const R = require('../js/rollup-logic.js');
 const JSZip = require('../vendor/jszip.min.js');
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SAMPLE = path.join(ROOT, 'samples/collect');
@@ -255,6 +257,17 @@ test('형식 약속: 스키마 이름 · 메일 칸 · 첨부 칸 · 결과 파�
     assert.equal(C.kindOf(name), kind);
   assert.ok(core.includes("'^(docx|docm|dotx)$' { return 'word' }") && core.includes("'^ai$' { return 'illustrator' }"));
 });
+test('형식 약속(2026-09-30 메일로 송/수신): 업무보고 파일 알아보는 규칙 · reports.js · 첨부저장=아니오 예외가 브라우저 쪽과 같다', () => {
+  const m = /\$Script:ReportMarker = '([^']+)'/.exec(core);
+  assert.ok(m, 'CollectorCore.ps1 에 ReportMarker');
+  const re = new RegExp(m[1]);                                   // PowerShell 정규식을 JS 로 그대로 — 같은 글을 같게 판정해야 함
+  for (const t of ['{"schema": "p27-report-file-v1"}', '{\n "schema":"p27-report-file-v1"', '{"schema": "p27-collect-v1"}', '{"x":"schema p27-report-file-v1"}'])
+    assert.equal(re.test(t), R.looksLikePackageText(t), t);
+  assert.ok(R.looksLikePackageText(JSON.stringify({ schema: R.PACKAGE_SCHEMA }, null, 1)));
+  assert.ok(collector.includes("'reports.js'") && collector.includes("'window.P27_REPORTS = '"));
+  assert.ok(/-not \$keepFiles -and \$rec\.extract -ne 'browser' -and \$rec\.extract -ne 'report'/.test(collector), '첨부저장=아니오 여도 업무보고 파일은 남김');
+  assert.ok(/if \(\$kind -eq 'other'\)[^\n]*Get-ReportPackageText/.test(collector), '.json(other)만 형식 표시를 봄');
+});
 test('Outlook 폴더 고르기: 보낸 편지함은 보낸 날짜(SentOn)로, 지운 편지함 · 정크는 기본 폴더 ID 로도 뺀다, 공용 폴더 제외', () => {
   assert.ok(collector.includes("$field = 'SentOn'"));
   assert.ok(collector.includes('$olFolderDeletedItems') && collector.includes('$olFolderJunk'));
@@ -303,7 +316,8 @@ if (PWSH) {
     ['가짜 Outlook 수집 — Restrict 가 0 건일 때 훑기(Run-MockCollect.ps1)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'empty']],
     ['가짜 Outlook 수집 — Restrict 로 거르기', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok']],
     ['가짜 Outlook 수집 — Online폴더=받은보낸하위(하위 폴더까지)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok', '-OnlineScope', '받은보낸하위']],
-    ['가짜 Outlook 수집 — Online폴더=전체(모든 메일 폴더)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok', '-OnlineScope', '전체']]]) {
+    ['가짜 Outlook 수집 — Online폴더=전체(모든 메일 폴더)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok', '-OnlineScope', '전체']],
+    ['가짜 Outlook 수집 — 첨부저장=아니오(업무보고 파일 · PDF 는 남김)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok', '-KeepFiles', '아니오']]]) {
     test('PowerShell: ' + label, () => {
       const r = spawnSync(PWSH, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, file)].concat(args), { encoding: 'utf8', cwd: ROOT });
       const tail = (r.stdout || '').trim().split('\n').slice(-1)[0];
@@ -311,6 +325,27 @@ if (PWSH) {
       assert.match(tail, /실패 0/);
     });
   }
+  // 수집기 → 도구: 가짜 Outlook 결과 폴더를 도구 쪽 로직으로 읽어 「받은 메일에서 찾은 보고서 파일」이 나오는지(자동 열기 · 폴더 열기 두 길)
+  test('PowerShell → 도구: 받은 메일 첨부에서 업무보고 파일 1개 찾기(자동 열기 reports.js · 폴더 열기 파일 읽기)', () => {
+    const out = path.join(os.tmpdir(), 'p27-mock-found-' + process.pid);
+    const r = spawnSync(PWSH, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, 'test/pwsh/Run-MockCollect.ps1'), '-Restrict', 'ok', '-KeepFiles', '아니오', '-OutDir', out, '-Keep'], { encoding: 'utf8', cwd: ROOT });
+    try {
+      assert.equal(r.status, 0, (r.stdout || '').slice(-400));
+      const man = JSON.parse(readFileSync(path.join(out, 'manifest.json'), 'utf8'));
+      const mails = C.mailsFromManifest(man, L.mainText, L.normalizeSubject);
+      const auto = Function('window', readFileSync(path.join(out, 'reports.js'), 'utf8') + '; return window.P27_REPORTS;')({});
+      const folder = {};
+      mails.forEach((m) => m.attachments.forEach((a) => { if (/\.json$/i.test(a.name) && a.file && existsSync(path.join(out, a.file))) folder[a.file] = readFileSync(path.join(out, a.file), 'utf8'); }));
+      assert.deepEqual(Object.keys(folder).length, 1);                // 다른 .json 은 첨부저장=아니오라 지워짐 → 업무보고 파일 하나만 남음
+      for (const texts of [auto, folder]) {
+        const f = R.findMailedPackages(mails, texts);
+        assert.deepEqual([f.found.length, f.bad.length], [1, 0]);
+        const x = f.found[0];
+        assert.deepEqual([x.pkg.author, x.pkg.unit, x.pkg.period.start, x.pkg.items.length, x.from, x.day, x.time, x.direction, x.name],
+          ['김가상', 'A파트(가상)', '2026-09-21', 3, '김가상(가상)', '2026-09-25', '17:30', 'received', '주간업무보고_20260921_김가상.json']);
+      }
+    } finally { rmSync(out, { recursive: true, force: true }); }
+  });
 } else console.log('  --  PowerShell(pwsh) 이 없어 수집기 자가검사 · 가짜 Outlook 수집은 건너뜁니다 (PWSH=<pwsh 경로> 로 지정 가능)');
 
 await Promise.all(pending);

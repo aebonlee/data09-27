@@ -32,11 +32,13 @@
   ];
   var KIND_LABEL = {
     word: 'Word', ppt: 'PowerPoint', excel: 'Excel', pdf: 'PDF', illustrator: 'Illustrator', image: '그림',
-    text: '글 파일', 'old-office': '옛 Office(97-2003)', hwp: '한글(HWP)', mail: '첨부 메일', archive: '압축 파일', other: '기타'
+    text: '글 파일', 'old-office': '옛 Office(97-2003)', hwp: '한글(HWP)', mail: '첨부 메일', archive: '압축 파일', other: '기타',
+    report: '업무보고 파일'   // 확장자가 아니라 내용(형식 표시 p27-report-file-v1)으로 수집기가 정함 — 2026-09-30 「메일로 송/수신」
   };
   var EXTRACT_LABEL = {
     ok: '글 뽑음', empty: '글 없음', browser: '브라우저에서 읽을 차례', meta: '이름·크기만', unsupported: '못 읽는 형식',
-    'too-large': '너무 커서 건너뜀', error: '읽다가 오류', skipped: '저장 안 함', 'no-file': '파일 없음(폴더를 골라 주세요)'
+    'too-large': '너무 커서 건너뜀', error: '읽다가 오류', skipped: '저장 안 함', 'no-file': '파일 없음(폴더를 골라 주세요)',
+    report: '08 보고서 취합에서 불러오기'
   };
   function extOf(name) { var m = /\.([^.\\/]+)$/.exec(str(name)); return m ? m[1].toLowerCase() : ''; }
   function kindOf(name) {

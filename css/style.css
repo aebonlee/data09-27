@@ -375,3 +375,9 @@ details.card[open] > summary { margin-bottom: 12px; }
 .att-detail { border-top: 1px solid var(--line); padding: 8px 0; }
 .att-detail > summary { cursor: pointer; overflow-wrap: anywhere; }
 .att .tag { margin-left: 4px; }
+
+/* 2026-09-30 「메일로 송/수신」 — 받은 메일에서 찾은 보고서 파일 · 임원 보고용 요약 미리보기 */
+.found { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; background: #fafbfd; }
+.found h3 { margin: 0 0 8px; font-size: 1rem; }
+.found td .tag + .tag { margin-left: 4px; }
+.exec-preview { display: block; width: 100%; min-height: 520px; border: 1px solid var(--line); border-radius: 8px; background: #fff; margin-top: 8px; }

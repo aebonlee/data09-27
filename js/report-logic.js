@@ -687,7 +687,11 @@
     ].join('\n');
   }
   function extractJsonArray(text) {
-    var t = str(text), f = /```(?:json)?\s*([\s\S]*?)```/i.exec(t);
+    // data09-27(2026-09-30 사내 LLM qwen3.8): Qwen3 의 생각하는 과정 <think>…</think> 를 먼저 뗀다 — 그 안의 [ ] 를 배열로 잘못 잡지 않게.
+    // 반자동으로 붙여 넣은 답에도 들어 있을 수 있어 여기서도 뗀다(자동 보내기는 ai-endpoint.stripThinking 이 먼저 뗌)
+    var t = str(text).replace(/<think>[\s\S]*?<\/think>/gi, ''), close = t.toLowerCase().lastIndexOf('</think>');
+    if (close >= 0) t = t.slice(close + 8);
+    var f = /```(?:json)?\s*([\s\S]*?)```/i.exec(t);
     if (f) t = f[1];
     var s = t.indexOf('['), e = t.lastIndexOf(']');
     if (s < 0 || e <= s) throw new Error('JSON 배열([ … ])을 찾지 못했습니다. AI 의 답을 그대로 붙여 넣어 주세요.');
@@ -1141,7 +1145,8 @@
 
   /* ── 저장 형태 ───────────────────────── */
   /* data09-27: 보고서 취합 — 받은 보고서 파일(rollup-logic.parsePackage 결과)과 내 메일 보고서 넣기 여부 */
-  function emptyRollup() { return { sources: [], includeOwn: false, approved: null }; }
+  /* found: 모은 메일의 첨부에서 찾은 보고서 파일(rollup-logic.findMailedPackages 결과 — 2026-09-30 「메일로 송/수신」). 불러오기 전까지 여기 둔다 */
+  function emptyRollup() { return { sources: [], includeOwn: false, approved: null, found: [] }; }
   function emptyState() {
     return { schema: SCHEMA_VERSION, settings: { type: 'weekly', refDay: '', weekStart: 1, author: '', title: '', boardStyle: 'brief', level: '팀원' }, projects: [], mails: [], items: [], prevPlansText: '', carryFinal: {}, taskProject: {}, history: [], summaryOverride: '', approved: null, collect: null, rollup: emptyRollup(), _sample: false };
   }
@@ -1163,7 +1168,8 @@
     if (p.collect && typeof p.collect === 'object') s.collect = p.collect;   // data09-27: 마지막 자동 수집 요약
     if (['팀원', '파트리더', '팀장', '임원'].indexOf(s.settings.level) < 0) s.settings.level = '팀원';
     if (p.rollup && typeof p.rollup === 'object' && Array.isArray(p.rollup.sources)) {
-      s.rollup = { sources: p.rollup.sources.filter(function (x) { return x && x.author && x.period && Array.isArray(x.items); }), includeOwn: !!p.rollup.includeOwn, approved: typeof p.rollup.approved === 'string' ? p.rollup.approved : null };
+      s.rollup = { sources: p.rollup.sources.filter(function (x) { return x && x.author && x.period && Array.isArray(x.items); }), includeOwn: !!p.rollup.includeOwn, approved: typeof p.rollup.approved === 'string' ? p.rollup.approved : null,
+        found: Array.isArray(p.rollup.found) ? p.rollup.found.filter(function (f) { return f && f.key && f.pkg && f.pkg.author && f.pkg.period && Array.isArray(f.pkg.items); }) : [] };
     }
     return s;
   }

@@ -19,6 +19,8 @@
         워드 · 파워포인트 · 엑셀(.docx .pptx .xlsx) → 파일 안 XML 을 바로 읽어 글 뽑기(Office 를 띄우지 않음)
         PDF · PDF 호환 일러스트(.ai)                → 업무보고 도구(브라우저)가 pdf.js 로 읽음
         그림(JPEG · PNG 등) · 옛 Office · 한글       → 이름 · 크기만(그림 글자 읽기(OCR)는 2단계)
+        이 도구의 업무보고 파일(.json)              → 「08 보고서 취합」이 불러오도록 글을 reports.js 에 담음(2026-09-30 「메일로 송/수신」)
+                                                    첨부저장=아니오 여도 이 파일은 남깁니다. 형식 표시가 없는 다른 .json 은 이름 · 크기만.
    5. 한 폴더에 manifest.json(목록) · 첨부 · 수집기록.txt 를 남기고, 업무보고 도구를 그 결과로 엽니다.
 
   읽기 전용입니다. Outlook 안의 메일을 옮기거나 지우거나 「읽음」으로 바꾸지 않고, 보내지도 않습니다.
@@ -266,6 +268,7 @@ if (-not $ListOnly) { New-Item -ItemType Directory -Force -Path (Join-Path $OutD
 $mails = New-Object System.Collections.ArrayList
 $seen = @{}; $dup = 0; $other = 0; $warnings = New-Object System.Collections.ArrayList
 $pdfData = [ordered]@{}; $pdfBytes = 0; $n = 0; $fi = 0
+$reportData = [ordered]@{}       # 첨부로 받은 업무보고 파일(.json)의 글 — 자동 열기(file://)에서는 브라우저가 첨부 파일을 직접 못 읽어서 넘겨 줌
 foreach ($t in $targets) {
   $fi++
   $f = $t.folder; $field = 'ReceivedTime'; if ($t.sent) { $field = 'SentOn' }
@@ -307,6 +310,12 @@ foreach ($t in $targets) {
       try { $a.SaveAsFile($path) } catch { $rec.extract = 'error'; $rec.note = '저장하지 못함: ' + $_.Exception.Message; $atts += , $rec; continue }
       $rel = 'att/' + $id + '/' + (Split-Path $path -Leaf)
       $rec.file = $rel
+      $pkgText = $null
+      if ($kind -eq 'other') { try { $pkgText = Get-ReportPackageText $path } catch { $pkgText = $null } }
+      if ($null -ne $pkgText) {
+        $rec.kind = 'report'; $rec.extract = 'report'; $rec.note = '업무보고 파일 — 「08 보고서 취합」에서 불러올 수 있음'
+        $reportData[$rel] = $pkgText
+      } else {
       try {
         switch ($kind) {
           { $_ -in 'word', 'ppt', 'excel' } {
@@ -327,9 +336,10 @@ foreach ($t in $targets) {
           default { $rec.extract = 'meta' }
         }
       } catch { $rec.extract = 'error'; $rec.note = '글을 뽑다가 오류: ' + $_.Exception.Message }
+      }
       if ($rec.text.Length -gt 20000) { $rec.text = $rec.text.Substring(0, 20000) }
       if ($rec.extract -eq 'ok') { [IO.File]::WriteAllText($path + '.txt', $rec.text, $Utf8) }
-      if (-not $keepFiles -and $rec.extract -ne 'browser') { Remove-Item -LiteralPath $path -Force; $rec.file = '' }   # 내가 방금 저장한 복사본만 지움
+      if (-not $keepFiles -and $rec.extract -ne 'browser' -and $rec.extract -ne 'report') { Remove-Item -LiteralPath $path -Force; $rec.file = '' }   # 내가 방금 저장한 복사본만 지움(PDF · 업무보고 파일은 도구가 읽어야 해서 남김)
       $atts += , $rec
     }
     $folderPath = ([string]$f.FolderPath) -replace '^\\\\[^\\]+\\', ''
@@ -365,8 +375,10 @@ $json = ConvertTo-JsonText $manifest
 [IO.File]::WriteAllText((Join-Path $OutDir 'manifest.json'), $json, $Utf8)
 [IO.File]::WriteAllText((Join-Path $OutDir 'manifest.js'), ('window.P27_COLLECT = ' + $json + ";`n"), $Utf8)
 [IO.File]::WriteAllText((Join-Path $OutDir 'pdfdata.js'), ('window.P27_PDF = ' + (ConvertTo-JsonText $pdfData) + ";`n"), $Utf8)
+[IO.File]::WriteAllText((Join-Path $OutDir 'reports.js'), ('window.P27_REPORTS = ' + (ConvertTo-JsonText $reportData) + ";`n"), $Utf8)
 $log = @('업무보고 자동수집 기록', ('기간: ' + $modeKo + ' ' + $P.start + ' ~ ' + $P.end), ('만든 때: ' + $manifest.generatedAt), '')
 foreach ($s in $stores) { $log += ('데이터 파일: ' + $s.name + ' [' + $s.kind + '] ' + $s.path + ' — ' + $scopeKo[$s.scope] + ' — 메일 ' + $s.mails + '통') }
+if ($reportData.Count) { $log += ('첨부로 받은 업무보고 파일: ' + $reportData.Count + '개 (' + (@($reportData.Keys) -join ', ') + ')') }
 $log += ''; $log += ('뺀 폴더: ' + (@($skippedFolders) -join ', ')); $log += ('같은 메일 한 번만: ' + $dup + '통'); $log += @($warnings)
 [IO.File]::WriteAllText((Join-Path $OutDir '수집기록.txt'), ($log -join "`r`n"), (New-Object System.Text.UTF8Encoding($true)))
 
@@ -381,6 +393,7 @@ $html = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>업�
 [IO.File]::WriteAllText($launcher, $html, $Utf8)
 
 Say ('저장 폴더: ' + $OutDir) 'Green'
+if ($reportData.Count) { Say ('받은 메일에서 업무보고 파일 ' + $reportData.Count + '개를 찾았습니다 — 도구의 「08 보고서 취합」에서 불러올 수 있습니다.') 'Green' }
 foreach ($w in $warnings) { Say ('  주의: ' + $w) 'Yellow' }
 if (-not $NoOpen) {
   if (Test-Path -LiteralPath (Join-Path $ToolRoot 'index.html')) { Start-Process -FilePath $launcher; Say '업무보고 도구를 엽니다. 창에서 「보고서 만들기」를 눌러 주세요.' }

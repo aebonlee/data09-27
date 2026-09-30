@@ -57,6 +57,14 @@ Check ((ConvertTo-FileUrlFromFull '\\srv\공유\a b.js') -eq 'file://srv/%EA%B3%
 Check ((ConvertTo-FileUrlFromFull '/Users/me/a b.js') -eq 'file:///Users/me/a%20b.js') 'file 주소(macOS · 리눅스)'
 $ai = @(Get-ChildItem -LiteralPath (Join-Path $sample 'att') -Recurse -Filter *.ai)[0]
 Check (Test-LooksPdf $ai.FullName) '일러스트(.ai) PDF 호환 머리'
+# 2026-09-30 「메일로 송/수신」: 첨부 .json 중 이 도구의 업무보고 파일만 알아본다(형식 표시로)
+$rm = Join-Path (Join-Path (Join-Path $root 'test') 'fixtures') 'report-mail'
+if (Test-Path -LiteralPath $rm) {
+  $pt = Get-ReportPackageText (Join-Path $rm '주간업무보고_20260921_김가상.json')
+  Check ($null -ne $pt -and $pt -like '*"author": "김가상"*') '업무보고 파일(.json) 알아보기 — 형식 표시 p27-report-file-v1'
+  Check ($null -eq (Get-ReportPackageText (Join-Path $rm '설정값.json'))) '다른 .json 은 업무보고 파일이 아님'
+  Check ($null -eq (Get-ReportPackageText (Join-Path $rm '주간업무보고_20260921_김가상.json') 100)) '너무 큰 .json 은 읽지 않음(최대 크기)'
+}
 
 Write-Host ''
 Write-Host ('통과 ' + $script:pass + ' · 실패 ' + $script:fail)

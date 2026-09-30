@@ -186,7 +186,7 @@ test('기간은 받은 파일의 다수결, 내 메일 보고서도 같은 기�
 });
 test('저장 형태: 보고 단계 · 취합 상태가 복원됨, 모르는 단계는 팀원', () => {
   const st = L.emptyState();
-  assert.equal(st.settings.level, '팀원'); assert.deepEqual(st.rollup, { sources: [], includeOwn: false, approved: null });
+  assert.equal(st.settings.level, '팀원'); assert.deepEqual(st.rollup, { sources: [], includeOwn: false, approved: null, found: [] });
   const back = L.restoreState(JSON.parse(JSON.stringify(Object.assign(st, { settings: Object.assign(st.settings, { level: '팀장' }), rollup: { sources: [R.parsePackage(P1), { bad: 1 }], includeOwn: true, approved: null } }))));
   assert.equal(back.settings.level, '팀장'); assert.equal(back.rollup.sources.length, 1); assert.equal(back.rollup.includeOwn, true);
   assert.equal(L.restoreState({ settings: { level: '사장' } }).settings.level, '팀원');
@@ -194,6 +194,76 @@ test('저장 형태: 보고 단계 · 취합 상태가 복원됨, 모르는 단�
 test('파일 이름', () => {
   assert.equal(R.packageFileName(R.parsePackage(P1)), '주간업무보고_20260921_김가상.json');
   assert.equal(R.packageFileName(R.parsePackage(pkgB)), '주간업무보고_20260921_파트리더취합_정파트_초안.json');
+});
+
+console.log('\n[취합] 메일로 주고받기 — 받은 메일 첨부에서 보고서 파일 찾기 (2026-09-30 답변 「메일로 송/수신」)');
+const am = (id, from, day, time, direction, atts) => ({ id, from: { name: from, email: 'x@example.com' }, day, time, subject: '[주간보고] ' + from, direction, attachments: atts });
+const at = (name, file, kind) => ({ name, file, kind: kind || 'other' });
+const MAILS = [
+  am('M0001', '김가상(가상)', '2026-09-25', '17:30', 'received', [at('주간업무보고_20260921_김가상.json', 'att/M0001/a.json', 'report'), at('설정값.json', 'att/M0001/b.json')]),
+  am('M0002', '이가상(가상)', '2026-09-26', '09:10', 'received', [at('주간업무보고_20260921_이가상_초안.json', 'att/M0002/c.json', 'report'), at('회의록.docx', 'att/M0002/d.docx', 'word')]),
+  am('M0003', '박가상(가상)', '2026-09-26', '10:00', 'received', [at('FW 김가상.json', 'att/M0003/e.json', 'report')]),        // 같은 파일을 전달받음 → 한 번만
+  am('M0004', '보고자(가상)', '2026-09-26', '11:00', 'sent', [at('주간업무보고_20260921_파트리더취합_정파트_초안.json', 'att/M0004/f.json', 'report')]),
+  am('M0005', '한가상(가상)', '2026-09-26', '12:00', 'received', [at('깨진보고서.json', 'att/M0005/g.json', 'report'), at('없는파일.json', 'att/M0005/h.json', 'report')])];
+const TEXTS = { 'att/M0001/a.json': P1, 'att/M0001/b.json': '{"schema":"other-v1","a":1}', 'att/M0002/c.json': P2, 'att/M0002/d.docx': 'x', 'att/M0003/e.json': P1,
+  'att/M0004/f.json': pkgB, 'att/M0005/g.json': '{"schema": "p27-report-file-v1", "author": ""}' };
+test('형식 표시가 있는 .json 만 · 같은 파일은 한 번 · 최근 메일부터 · 내가 보낸 것은 mine', () => {
+  const f = R.findMailedPackages(MAILS, TEXTS);
+  // 손으로 센 값: 보고서 파일 = a(P1) · c(P2) · e(P1 과 같음 → 빠짐) · f(pkgB, 보낸 메일) → 3개. 설정값.json · 회의록.docx 는 무시
+  assert.deepEqual(f.found.map((x) => [x.mailId, x.pkg.author, x.from, x.direction, x.mine]),
+    [['M0004', '정파트', '보고자(가상)', 'sent', true], ['M0002', '이가상', '이가상(가상)', 'received', false], ['M0001', '김가상', '김가상(가상)', 'received', false]]);
+  assert.equal(f.found[2].pkg._name, '주간업무보고_20260921_김가상.json');
+  assert.equal(f.found[0].pkg.rollup, true);
+  // 깨진 보고서(보고자 없음)와 폴더에 없는 파일은 이유와 함께
+  assert.deepEqual(f.bad.map((b) => b.name), ['깨진보고서.json', '없는파일.json']);
+  assert.match(f.bad[0].reason, /주간 · 월간 표시가 없습니다/); assert.match(f.bad[1].reason, /수집 폴더 열기/);
+});
+test('다른 .json · 형식 표시가 없는 글은 조용히 넘김, 글이 없는 일반 .json 도 넘김', () => {
+  assert.equal(R.looksLikePackageText('{"schema": "p27-report-file-v1"}'), true);
+  assert.equal(R.looksLikePackageText('{"schema": "p27-collect-v1"}'), false);
+  assert.equal(R.looksLikePackageText(' '.repeat(5000) + '"schema":"p27-report-file-v1"'), false);   // 앞 4096자에서만(수집기와 같음)
+  const f = R.findMailedPackages([am('M1', 'a', '2026-09-25', '09:00', 'received', [at('x.json', 'att/M1/x.json'), at('y.json', '')])], {});
+  assert.deepEqual([f.found.length, f.bad.length], [0, 0]);
+});
+test('저장 형태: 찾은 목록이 복원됨(모양이 틀린 것은 뺌)', () => {
+  const f = R.findMailedPackages(MAILS, TEXTS).found;
+  const st = Object.assign(L.emptyState(), { rollup: { sources: [], includeOwn: false, approved: null, found: f.concat([{ key: 'x' }]) } });
+  assert.equal(L.restoreState(JSON.parse(JSON.stringify(st))).rollup.found.length, 3);
+});
+test('윗단계로 보낼 메일: 제목 · 본문을 채운 mailto(첨부는 직접)', () => {
+  const d = R.mailDraft(R.parsePackage(P1), '주간업무보고_20260921_김가상.json');
+  assert.equal(d.subject, '[주간업무보고] 2026-09-21 ~ 2026-09-27 김가상(A파트(가상))');
+  assert.ok(d.body.includes('첨부: 주간업무보고_20260921_김가상.json'));
+  assert.equal(d.href, 'mailto:?subject=' + encodeURIComponent(d.subject) + '&body=' + encodeURIComponent(d.body));
+  assert.ok(!/attach/i.test(d.href));
+  assert.equal(R.mailDraft(R.parsePackage(pkgB)).subject, '[주간업무보고] 2026-09-21 ~ 2026-09-27 정파트(B파트(가상)) 파트리더 취합 — 초안');
+});
+
+console.log('\n[취합] 임원 보고용 요약 — 임시 양식 (2026-09-30 답변 「담당 임원에게는 다른 양식」)');
+const X = R.execSummary(T, { unit: '디자인팀(가상)' });
+test('파트마다 건수 — 손으로 센 값(A파트: 김가상 · 이가상 / B파트: 한가상)', () => {
+  assert.deepEqual(X.parts.map((p) => [p.name, p.reporters, p.counts]), [
+    ['A파트(가상)', 2, { performance: 3, done: 2, plan: 1, issue: 2, delayed: 1, decision: 1, check: 2 }],
+    ['B파트(가상)', 1, { performance: 1, done: 1, plan: 0, issue: 0, delayed: 0, decision: 0, check: 0 }]]);
+  assert.deepEqual(X.totals, { parts: 2, reporters: 3, performance: 4, done: 3, plan: 1, issue: 2, delayed: 1, decision: 1, check: 2 });
+});
+test('핵심 실적은 완료 먼저 · 이슈는 의사결정 → 지연 순 · 계획은 날짜와 함께', () => {
+  const a = X.parts[0];
+  assert.deepEqual(a.highlights, ['캡 — B안 최종 시안 선정', 'CMF — 샘플 3종 평가 완료', '캡 — 조작부 도면 검토 (진행 중)']);
+  assert.deepEqual(a.issues, ['[의사결정] CMF — 재도장 필요', '[지연] 캡 — 협력사 치수 회신 지연']);
+  assert.deepEqual(a.plans, ['캡 — 3D 모델링 업데이트 진행 예정 (10/02)']);
+  assert.deepEqual(X.parts[1].highlights, ['전시 — 부스 렌더링 v2 배포']);
+  assert.deepEqual([X.heading, X.period, X.nextLabel], ['디자인팀(가상) 주간 업무 요약', '2026-09-21 ~ 2026-09-27', '다음 주 계획']);
+});
+test('3건이 넘으면 「외 N건」, 임시 양식 표시는 문서에 늘 들어감', () => {
+  const many = pkg({ author: '서가상', items: [1, 2, 3, 4, 5].map((i) => it('실적', 'P', '일 ' + i, { status: i === 5 ? '완료' : '진행 중', evidence: ['M000' + i] })) });
+  const x = R.execSummary(part([many]).rep);
+  assert.deepEqual([x.parts[0].highlights, x.parts[0].more.highlights], [['P — 일 5', 'P — 일 1 (진행 중)', 'P — 일 2 (진행 중)'], 2]);
+  const html = R.execSummaryHtml(X);
+  assert.ok(html.includes('임시 양식 — 실제 임원 보고 양식을 받으면 맞춥니다') && X.note === R.EXEC_NOTE);
+  assert.ok(html.includes('<td>A파트(가상)</td><td class="n">2</td><td class="n">3 (2)</td><td class="n">1</td><td class="n">2 (1 · 1)</td><td class="n">2</td>'));
+  assert.ok(html.includes('합계 2개 파트'));
+  assert.ok(R.execSummaryHtml(R.execSummary(part([pkg({ author: '<b>', items: [it('실적', 'P', '<script>x</script>', { evidence: ['M1'] })] })]).rep)).includes('&lt;script&gt;'));
 });
 
 console.log('\n[취합] ' + passed + '개 통과' + (process.exitCode ? ' · 실패 있음' : ''));

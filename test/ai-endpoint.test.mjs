@@ -67,5 +67,57 @@ test('호출: 가짜 fetch 로 성공 · 서버 오류 · 연결 실패', async 
   await assert.rejects(E.callChat(cfg, E.promptMessages('p'), { fetch: down }), /CORS/);
 });
 
+// ── 2026-09-30 답변: 사내 LLM 모델 qwen3.8 ──
+const L = require('../js/report-logic.js');
+test('qwen3.8: 모델 칸 기본값(주소는 비움), 예전 설정에 모델 칸이 없으면 기본값 · 일부러 비운 것은 그대로', () => {
+  const d = E.defaultConfig();
+  assert.deepEqual([d.model, d.baseUrl, E.isReady(d)], ['qwen3.8', '', false]);   // 주소를 모르므로 자동 보내기는 아직 꺼짐
+  assert.equal(E.cleanConfig({ baseUrl: 'http://10.0.0.5:8000/v1' }).model, 'qwen3.8');
+  assert.equal(E.cleanConfig({ model: '' }).model, '');
+  assert.equal(E.cleanConfig({ model: ' qwen3:8b ' }).model, 'qwen3:8b');
+});
+test('qwen3.8: vLLM · Ollama 식 OpenAI 호환 주소로 같은 모양의 요청(/v1/chat/completions · model · messages)', () => {
+  for (const [base, url] of [['http://10.0.0.5:8000/v1', 'http://10.0.0.5:8000/v1/chat/completions'],          // vLLM 기본 포트
+    ['http://localhost:11434/v1/', 'http://localhost:11434/v1/chat/completions']]) {                                 // Ollama 기본 포트
+    const r = E.buildChatRequest({ baseUrl: base, model: 'qwen3.8' }, E.promptMessages('질문', '시스템'));
+    const b = JSON.parse(r.init.body);
+    assert.equal(r.url, url);
+    assert.deepEqual([b.model, b.messages.map((m) => m.role).join(','), b.temperature, 'stream' in b], ['qwen3.8', 'system,user', 0.2, false]);
+  }
+});
+test('qwen3.8: <think>…</think> 떼기 — 여러 번 · 닫는 표시만 · 잘림', () => {
+  assert.deepEqual(E.stripThinking('<think>\n메일 3통을 보면 [M0001] 은…\n</think>\n\n[{"a":1}]'), { text: '[{"a":1}]', truncated: false });
+  assert.deepEqual(E.stripThinking('<THINK>a</THINK>답1 <think>b</think>답2'), { text: '답1 답2', truncated: false });
+  assert.deepEqual(E.stripThinking('생각이 여기서부터\n</think>\n\n확인'), { text: '확인', truncated: false });     // 여는 표시는 서버 템플릿 쪽
+  assert.deepEqual(E.stripThinking('<think>메일을 읽어 보면'), { text: '', truncated: true });
+  assert.deepEqual(E.stripThinking('그냥 답'), { text: '그냥 답', truncated: false });
+});
+test('qwen3.8: 응답 읽기가 생각 부분을 떼고 답만 — 생각만 오고 잘리면 알아볼 수 있게', () => {
+  const think = '<think>\n사용자는 JSON 배열을 원한다. 예: [{"text":"예시"}] 형태…\n</think>\n\n';
+  const answer = '[{"category":"실적","text":"B안 시안 확정","evidence":["M0001"]}]';
+  assert.equal(E.parseChatResponse({ choices: [{ message: { role: 'assistant', content: think + answer } }] }), answer);
+  assert.throws(() => E.parseChatResponse({ choices: [{ message: { content: '<think>메일 9통 중에서' }, finish_reason: 'length' }] }), /잘렸습니다/);
+  assert.throws(() => E.parseChatResponse({ choices: [{ message: { content: '<think>생각</think>' } }] }), /생각하는 과정/);
+  // 반자동으로 붙여 넣은 답(생각 포함)도 생각 안의 [ ] 를 배열로 잡지 않는다
+  assert.deepEqual(L.extractJsonArray(think + answer).map((x) => x.text), ['B안 시안 확정']);
+  assert.deepEqual(L.extractJsonArray('…[참고]…\n</think>\n' + answer).length, 1);
+});
+test('qwen3.8: 모델 목록(GET /v1/models) — vLLM · Ollama 모양, 표기가 조금 다르면 서버 이름을 권함', () => {
+  const r = E.buildModelsRequest({ baseUrl: 'http://localhost:11434/v1/chat/completions', apiKey: '' });
+  assert.deepEqual([r.url, r.init.method, Object.keys(r.init.headers).length], ['http://localhost:11434/v1/models', 'GET', 0]);
+  assert.deepEqual(E.parseModelsResponse({ object: 'list', data: [{ id: 'qwen3:8b', object: 'model' }, { id: 'bge-m3' }] }), ['qwen3:8b', 'bge-m3']);
+  assert.deepEqual(E.parseModelsResponse({ models: [{ name: 'Qwen3.8' }] }), ['Qwen3.8']);
+  assert.deepEqual(E.matchModel('qwen3.8', ['qwen3.8', 'x']), { exact: true, suggest: 'qwen3.8' });
+  assert.deepEqual(E.matchModel('qwen3.8', ['Qwen3-8', 'x']), { exact: false, suggest: 'Qwen3-8' });
+  assert.deepEqual(E.matchModel('qwen3.8', ['qwen3:8b']), { exact: false, suggest: '' });                  // 8b 는 다른 이름 — 추측해서 바꾸지 않음
+  assert.throws(() => E.parseModelsResponse({ error: { message: 'unauthorized' } }), /unauthorized/);
+});
+test('qwen3.8: 호출 전체 — 가짜 서버가 생각 + 답을 보내면 답만 돌려준다', async () => {
+  const srv = () => Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({ choices: [{ message: { content: '<think>짧게 답하자</think>\n\n확인' } }] })) });
+  assert.equal(await E.callChat({ baseUrl: 'http://10.0.0.5:8000/v1', model: 'qwen3.8' }, E.promptMessages('연결 확인'), { fetch: srv }), '확인');
+  const models = () => Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{"data":[{"id":"qwen3.8"}]}') });
+  assert.deepEqual(await E.callModels({ baseUrl: 'http://10.0.0.5:8000/v1' }, { fetch: models }), ['qwen3.8']);
+});
+
 await Promise.all(pending);
 console.log('\n[AI] ' + passed + '개 통과' + (failed ? ' · 실패 ' + failed : ''));

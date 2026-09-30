@@ -15,7 +15,14 @@
    - 항목 문장 앞에 「[보고자]」를 붙이고, 근거 메일 ID 는 「보고자·M0003」으로 바꿔 서로 겹치지 않게 합니다.
      이미 취합한 파일(파트 취합본)을 다시 취합할 때는 원래 보고자 이름을 그대로 둡니다(「[파트리더] [팀원]」처럼 겹치지 않게).
    - 확인 필요 · 상충 · AI 추론 · 근거 없음 · 첨부 근거 표시는 원래 값 그대로 가져옵니다(취합하면서 지우지 않음).
-   - 양식 표는 프로젝트마다 한 줄로 모으고, 칸 안의 각 줄 앞에 보고자를 붙입니다. */
+   - 양식 표는 프로젝트마다 한 줄로 모으고, 칸 안의 각 줄 앞에 보고자를 붙입니다.
+
+   2026-09-30 두 번째 답변 반영
+   - 「메일로 송/수신」 → 받은 메일의 첨부에서 보고서 파일을 찾습니다(findMailedPackages). 수집기가 첨부로 온 .json 중
+     형식 표시(schema: p27-report-file-v1)가 있는 것만 「보고서 파일」로 표시하고 그 글을 넘겨 줍니다. 형식 표시가 없는 .json 은 무시합니다.
+     보낼 때는 메일 제목을 채운 mailto: 링크를 만듭니다(mailDraft — mailto 로는 첨부를 넣을 수 없어 파일은 직접 첨부).
+   - 「담당 임원에게는 다른 양식」 → 실제 양식을 받기 전까지 쓰는 한 장짜리 임시 요약(execSummary · execSummaryHtml).
+     파트(보고 단위)마다 핵심 실적 · 주요 이슈 · 다음 계획 3건씩과 건수. 「임시 양식」임을 제목 아래에 늘 적습니다. */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./report-logic.js'));
   else root.RollupLogic = factory(root.RPLogic);
@@ -219,7 +226,7 @@
         var who = s.rollup ? (x.reporter || s.author) : s.author;
         return Object.assign({}, x, {
           id: 'R' + ('00' + (++n)).slice(-3), reporter: who, rawText: x.text, text: '[' + who + '] ' + x.text,
-          evidence: x.evidence.map(ev), from: s.author, taskName: ''
+          evidence: x.evidence.map(ev), from: s.author, part: s.unit || s.author, taskName: ''
         });
       });
       items = items.concat(mine);
@@ -281,7 +288,114 @@
     return out;
   }
 
+  /* ── 메일로 주고받기 (2026-09-30 답변 「메일로 송/수신」) ── */
+  /* 글에 보고서 파일 형식 표시가 있는가 — 수집기(PowerShell)의 같은 검사와 같은 규칙 */
+  var MARKER_RE = /"schema"\s*:\s*"p27-report-file-v1"/;
+  function looksLikePackageText(text) { return MARKER_RE.test(str(text).slice(0, 4096)); }
+  function packageKey(p) { return [p.author, p.unit, p.type, p.period && p.period.start, p.generatedAt].join('|'); }
+  /* 모은 메일의 첨부 중 보고서 파일 찾기
+     mails: 수집 결과의 메일(첨부 { name, kind, file }). texts: { 첨부 경로(file): 파일 글 } — 자동 열기는 수집기가 넘긴 글, 폴더 열기는 파일을 읽은 글
+     → { found: [{ key, pkg, name, file, mailId, from, fromEmail, day, time, subject, direction, mine }], bad: [{ name, reason }] }
+        found 는 최근 메일부터. 같은 파일(보고자 · 단위 · 기간 · 만든 때가 같음)이 여러 메일에 있으면 한 번만. */
+  function findMailedPackages(mails, texts) {
+    texts = texts || {};
+    var found = [], bad = [], seen = {};
+    (mails || []).forEach(function (m) {
+      (m.attachments || []).forEach(function (a) {
+        var isJson = /\.json$/i.test(str(a.name)) || a.kind === 'report';
+        if (!isJson || !a.file) return;
+        var text = texts[a.file];
+        if (text == null) { if (a.kind === 'report') bad.push({ name: a.name, reason: '수집 폴더에서 파일을 찾지 못했습니다 — 「02」의 「수집 폴더 열기」로 폴더째 골라 주세요' }); return; }
+        if (!looksLikePackageText(text)) return;                      // 다른 .json(설정 · 데이터 파일)은 조용히 넘김
+        var pkg;
+        try { pkg = parsePackage(text); } catch (e) { bad.push({ name: a.name, reason: e.message }); return; }
+        pkg._name = str(a.name);
+        var k = packageKey(pkg);
+        if (seen[k]) return;
+        seen[k] = 1;
+        found.push({ key: k, pkg: pkg, name: str(a.name), file: str(a.file), mailId: str(m.id || m.cid), from: trim(m.from && (m.from.name || m.from.email)), fromEmail: trim(m.from && m.from.email),
+          day: str(m.day), time: str(m.time), subject: str(m.subject), direction: m.direction === 'sent' ? 'sent' : 'received', mine: m.direction === 'sent' });
+      });
+    });
+    found.sort(function (a, b) { return (b.day + b.time).localeCompare(a.day + a.time); });
+    return { found: found, bad: bad };
+  }
+  /* 윗단계에게 보낼 메일 — 제목 · 본문을 채운 mailto: 주소. 받는 사람과 첨부는 사용자가 넣습니다(mailto 로는 첨부를 넣을 수 없음) */
+  function mailDraft(pkg, fileName) {
+    var p = pkg.period || { start: '', end: '' };
+    var subject = '[' + (pkg.type === 'monthly' ? '월간' : '주간') + '업무보고] ' + p.start + ' ~ ' + p.end + ' ' + (pkg.author || '') + (pkg.unit ? '(' + pkg.unit + ')' : '') +
+      (pkg.rollup ? ' ' + pkg.level + ' 취합' : '') + (pkg.approved ? '' : ' — 초안');
+    var body = [(pkg.type === 'monthly' ? '월간' : '주간') + ' 업무보고 파일을 첨부합니다(' + p.start + ' ~ ' + p.end + ').', '첨부: ' + (fileName || packageFileName(pkg)), '',
+      '받은 파일은 업무보고 도구의 「08 보고서 취합」에서 불러오면 됩니다. 메일을 주간보고.bat 로 모으면 첨부에서 자동으로 찾아 줍니다.'].join('\r\n');
+    return { subject: subject, body: body, href: 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body) };
+  }
+
+  /* ── 임원 보고용 요약 (임시 양식) ──────────── */
+  var EXEC_NOTE = '임시 양식 — 실제 임원 보고 양식을 받으면 맞춥니다';
+  var EXEC_MAX = 3;
+  function mmdd(d) { return isDay(d) ? d.slice(5).replace('-', '/') : ''; }
+  /* rep: mergePackages 의 rep(취합본) 또는 내 메일 보고서. opts.unit(보고 단위) */
+  function execSummary(rep, opts) {
+    opts = opts || {};
+    var all = flat(rep.performance).concat(flat(rep.plan), flat(rep.issue));
+    var partOf = function (x) { return x.part || (rep.rollup ? x.from : '') || trim(opts.unit) || rep.author || '전체'; };
+    var order = [], by = {};
+    (rep.rollup ? (rep.sources || []).map(function (s) { return s.unit || s.author; }) : []).concat(all.map(partOf)).forEach(function (n) { if (!by[n]) { by[n] = []; order.push(n); } });
+    all.forEach(function (x) { by[partOf(x)].push(x); });
+    var line = function (x) { return (x.project && x.project !== L.OTHER_PROJECT ? x.project + ' — ' : '') + (x.rawText != null ? x.rawText : str(x.text)); };
+    var rank = function (list, score) { return list.map(function (x, i) { return { x: x, i: i, s: score(x) }; }).sort(function (a, b) { return a.s - b.s || a.i - b.i; }).map(function (o) { return o.x; }); };
+    var parts = order.map(function (name) {
+      var xs = by[name], perf = xs.filter(function (x) { return x.category === '실적'; }), plan = xs.filter(function (x) { return x.category === '계획'; }), iss = xs.filter(function (x) { return x.category === '이슈'; });
+      var srcRep = (rep.sources || []).filter(function (s) { return (s.unit || s.author) === name; });
+      var reporters = uniq([].concat.apply([], srcRep.map(function (s) { return s.reporters || [s.author]; })).concat(xs.map(function (x) { return x.reporter; })).filter(Boolean));
+      var counts = { performance: perf.length, done: perf.filter(function (x) { return x.status === '완료'; }).length, plan: plan.length, issue: iss.length,
+        delayed: iss.filter(function (x) { return x.status === '지연'; }).length, decision: iss.filter(function (x) { return x.decision; }).length, check: xs.filter(needsCheck).length };
+      var hi = rank(perf, function (x) { return x.status === '완료' ? 0 : 1; }).map(function (x) { return line(x) + (x.status && x.status !== '완료' ? ' (' + x.status + ')' : ''); });
+      var is = rank(iss, function (x) { return x.decision ? 0 : x.status === '지연' ? 1 : 2; }).map(function (x) { return (x.decision ? '[의사결정] ' : x.status === '지연' ? '[지연] ' : '') + line(x); });
+      var pl = rank(plan, function (x) { return isDay(x.date) ? Number(x.date.replace(/-/g, '')) : 99999999; }).map(function (x) { return line(x) + (isDay(x.date) ? ' (' + mmdd(x.date) + ')' : ''); });
+      return { name: name, reporters: reporters.length, counts: counts,
+        highlights: hi.slice(0, EXEC_MAX), issues: is.slice(0, EXEC_MAX), plans: pl.slice(0, EXEC_MAX),
+        more: { highlights: Math.max(0, hi.length - EXEC_MAX), issues: Math.max(0, is.length - EXEC_MAX), plans: Math.max(0, pl.length - EXEC_MAX) } };
+    }).filter(function (p) { return by[p.name].length || (rep.sources || []).length; });
+    var sum = function (k) { return parts.reduce(function (n, p) { return n + p.counts[k]; }, 0); };
+    var unit = trim(opts.unit);
+    return {
+      title: '임원 보고용 요약', note: EXEC_NOTE, heading: (unit ? unit + ' ' : '') + (rep.type === 'monthly' ? '월간' : '주간') + ' 업무 요약',
+      period: rep.period ? rep.period.start + ' ~ ' + rep.period.end : '', nextLabel: rep.type === 'monthly' ? '다음 달 계획' : '다음 주 계획',
+      author: str(rep.author), approved: rep.approved || null, generated: str(rep.generated),
+      totals: { parts: parts.length, reporters: rep.counts && rep.counts.reporters != null ? rep.counts.reporters : uniq(all.map(function (x) { return x.reporter; }).filter(Boolean)).length || 1,
+        performance: sum('performance'), done: sum('done'), plan: sum('plan'), issue: sum('issue'), delayed: sum('delayed'), decision: sum('decision'), check: sum('check') },
+      parts: parts
+    };
+  }
+  function execSummaryHtml(m) {
+    var e = L.esc, t = m.totals;
+    var li = function (list, more) { return list.length ? '<ul>' + list.map(function (x) { return '<li>' + e(x) + '</li>'; }).join('') + (more ? '<li class="more">외 ' + more + '건 — 취합 보고서 참고</li>' : '') + '</ul>' : '<p class="none">없음</p>'; };
+    var h = '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>' + e(m.title + ' ' + m.period) + '</title><style>' +
+      'body{font-family:"Malgun Gothic","맑은 고딕",sans-serif;font-size:10.5pt;color:#111;margin:18mm 16mm;word-break:keep-all;overflow-wrap:break-word}' +
+      'h1{font-size:16pt;margin:0 0 4px}.temp{display:inline-block;border:1px solid #b45309;color:#b45309;padding:2px 8px;font-size:9pt;margin:4px 0 10px}' +
+      '.meta{color:#444;margin:0 0 12px}table{border-collapse:collapse;width:100%;margin:0 0 14px}th,td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top}' +
+      'th{background:#eef2f7}td.n{text-align:right}h2{font-size:12pt;margin:14px 0 6px;border-bottom:2px solid #1f3a5f;padding-bottom:2px}' +
+      '.cols{display:table;width:100%;table-layout:fixed}.col{display:table-cell;padding-right:10px}.col h3{font-size:10.5pt;margin:4px 0}ul{margin:0;padding-left:18px}li{margin:2px 0}' +
+      '.none{color:#777;margin:0}.more{color:#555;list-style:none;margin-left:-18px}</style></head><body>';
+    h += '<h1>' + e(m.heading) + '</h1><div class="temp">' + e(m.note) + '</div>';
+    h += '<p class="meta">기간 ' + e(m.period) + (m.author ? ' · 작성 ' + e(m.author) : '') + ' · ' + (m.approved ? '승인 ' + e(m.approved) : '초안') + '</p>';
+    h += '<table><thead><tr><th>파트(보고 단위)</th><th>보고자</th><th>실적(완료)</th><th>' + e(m.nextLabel) + '</th><th>이슈(지연 · 의사결정)</th><th>확인 필요</th></tr></thead><tbody>';
+    m.parts.forEach(function (p) {
+      var c = p.counts;
+      h += '<tr><td>' + e(p.name) + '</td><td class="n">' + p.reporters + '</td><td class="n">' + c.performance + ' (' + c.done + ')</td><td class="n">' + c.plan + '</td><td class="n">' + c.issue + ' (' + c.delayed + ' · ' + c.decision + ')</td><td class="n">' + c.check + '</td></tr>';
+    });
+    h += '<tr><th>합계 ' + t.parts + '개 파트</th><th class="n">' + t.reporters + '</th><th class="n">' + t.performance + ' (' + t.done + ')</th><th class="n">' + t.plan + '</th><th class="n">' + t.issue + ' (' + t.delayed + ' · ' + t.decision + ')</th><th class="n">' + t.check + '</th></tr></tbody></table>';
+    m.parts.forEach(function (p) {
+      h += '<h2>' + e(p.name) + '</h2><div class="cols"><div class="col"><h3>핵심 실적</h3>' + li(p.highlights, p.more.highlights) + '</div><div class="col"><h3>주요 이슈</h3>' + li(p.issues, p.more.issues) +
+        '</div><div class="col"><h3>' + e(m.nextLabel) + '</h3>' + li(p.plans, p.more.plans) + '</div></div>';
+    });
+    return h + '</body></html>';
+  }
+
   return {
+    EXEC_NOTE: EXEC_NOTE, looksLikePackageText: looksLikePackageText, findMailedPackages: findMailedPackages, mailDraft: mailDraft,
+    execSummary: execSummary, execSummaryHtml: execSummaryHtml,
     PACKAGE_SCHEMA: PACKAGE_SCHEMA, LEVELS: LEVELS, LEVEL_NOTE: LEVEL_NOTE, SECTIONS: SECTIONS,
     nextLevel: nextLevel, lowerLevel: lowerLevel, needsCheck: needsCheck,
     makePackage: makePackage, packageFileName: packageFileName, parsePackage: parsePackage, reportersOf: reportersOf,

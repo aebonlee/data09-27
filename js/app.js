@@ -245,13 +245,27 @@
     return p.then(function () { return jobs.length; });
   }
   function renderBusy() { var el = document.getElementById('busyLine'); if (el) el.textContent = busy; }
-  /* manifest(수집 결과) 넣기. source: 'auto' | 'folder' | 'sample' */
-  function importCollection(manifest, getBytes, source, extra) {
+  /* 모은 메일의 첨부 .json 글 모으기 — getText(rel) → Promise<string|null> (2026-09-30 「메일로 송/수신」)
+     자동 열기는 수집기가 넘긴 reports.js 의 글, 폴더 열기는 그 파일을 읽은 글 */
+  function readReportTexts(mails, getText) {
+    var texts = {}, p = Promise.resolve();
+    if (!getText) return p.then(function () { return texts; });
+    mails.forEach(function (m) {
+      (m.attachments || []).forEach(function (a) {
+        if (!a.file || !(a.kind === 'report' || /\.json$/i.test(a.name))) return;
+        p = p.then(function () { return getText(a.file); }).then(function (t) { if (t != null) texts[a.file] = t; }, function () { /* 못 읽으면 건너뜀 */ });
+      });
+    });
+    return p.then(function () { return texts; });
+  }
+  /* manifest(수집 결과) 넣기. source: 'auto' | 'folder' | 'sample'. getReportText: 첨부 .json 글 읽기(선택) */
+  function importCollection(manifest, getBytes, source, extra, getReportText) {
     var m, mails, summary;
     try { m = C.parseManifest(manifest); mails = C.mailsFromManifest(m, L.mainText, L.normalizeSubject); summary = C.collectSummary(m); }
     catch (e) { busy = ''; toast('수집 결과를 읽지 못했습니다: ' + e.message, true); render(); return Promise.resolve(false); }
     setBusy('수집 결과를 넣는 중…');
-    return readPending(mails, getBytes).then(function (nPdf) {
+    var reportTexts = {};
+    return readReportTexts(mails, getReportText).then(function (t) { reportTexts = t; return readPending(mails, getBytes); }).then(function (nPdf) {
       var keep = st.mails.filter(function (x) { return x.source !== 'collect' && !(source === 'sample'); });
       var ps = C.settingsFromManifest(m);
       var s = source === 'sample' ? L.emptyState() : st;
@@ -272,9 +286,13 @@
       summary.source = source; summary.pdfRead = nPdf;
       summary.pdfOk = mails.reduce(function (n, x) { return n + x.attachments.filter(function (a) { return (a.kind === 'pdf' || a.kind === 'illustrator') && a.extract === 'ok'; }).length; }, 0);
       s.collect = summary;
+      // 받은 메일의 첨부에서 업무보고 파일 찾기 → 「08 보고서 취합」에서 불러오기
+      var fm = R.findMailedPackages(s.mails.filter(function (x) { return x.source === 'collect'; }), reportTexts);
+      s.rollup.found = fm.found; summary.reportsFound = fm.found.length; summary.reportsBad = fm.bad;
       st = s; busy = '';
       save();
-      toast('메일 ' + r.added.length + '통 · 첨부 ' + summary.attachments.total + '개를 넣었습니다' + (r.duplicates.length ? '(같은 메일 ' + r.duplicates.length + '통은 건너뜀)' : '') + '. 「보고서 만들기」를 눌러 주세요.');
+      toast('메일 ' + r.added.length + '통 · 첨부 ' + summary.attachments.total + '개를 넣었습니다' + (r.duplicates.length ? '(같은 메일 ' + r.duplicates.length + '통은 건너뜀)' : '') + '. 「보고서 만들기」를 눌러 주세요.' +
+        (fm.found.length ? ' 받은 메일에서 업무보고 파일 ' + fm.found.length + '개도 찾았습니다(08 보고서 취합).' : ''));
       render();
       return true;
     });
@@ -290,7 +308,8 @@
     if (!manPath) { toast('고른 곳에 manifest.json 이 없습니다. 주간보고.bat · 월간보고.bat 가 만든 폴더(문서\\업무보고_수집\\…)를 골라 주세요.', true); return; }
     RD.fileText(byPath[manPath]).then(function (text) {
       var getBytes = function (rel) { var p = idx[rel]; return p ? RD.fileBytes(byPath[p]) : Promise.resolve(null); };
-      return importCollection(text, getBytes, 'folder');
+      var getText = function (rel) { var p = idx[rel]; return p ? RD.fileText(byPath[p]) : Promise.resolve(null); };
+      return importCollection(text, getBytes, 'folder', null, getText);
     }).catch(function (e) { toast('폴더를 읽지 못했습니다: ' + e.message, true); });
   }
   /* 자동 열기(#/make?collect=file:///…/manifest.js) — .bat 가 만든 「보고서_열기.html」이 이 주소로 엽니다 */
@@ -299,14 +318,18 @@
     if (!q.url && !q.error) return false;
     history.replaceState(null, '', location.pathname + location.search + '#/make');
     if (q.error) { toast(q.error, true); return false; }
-    window.P27_COLLECT = null; window.P27_PDF = null;
+    window.P27_COLLECT = null; window.P27_PDF = null; window.P27_REPORTS = null;
     setBusy('수집 결과를 여는 중…');
     RD.addScript(q.url).then(function () {
       return RD.addScript(q.url.replace(/manifest\.js$/i, 'pdfdata.js')).catch(function () { /* PDF 가 없거나 못 읽으면 건너뜀 */ });
     }).then(function () {
+      return RD.addScript(q.url.replace(/manifest\.js$/i, 'reports.js')).catch(function () { /* 예전 수집기 결과에는 없음 */ });
+    }).then(function () {
       if (!window.P27_COLLECT) throw new Error('manifest.js 에 수집 결과가 없습니다');
       var pdf = window.P27_PDF || {};
-      return importCollection(window.P27_COLLECT, function (rel) { return Promise.resolve(pdf[rel] ? RD.base64ToBytes(pdf[rel]) : null); }, 'auto');
+      var reps = window.P27_REPORTS || {};
+      return importCollection(window.P27_COLLECT, function (rel) { return Promise.resolve(pdf[rel] ? RD.base64ToBytes(pdf[rel]) : null); }, 'auto', null,
+        function (rel) { return Promise.resolve(reps[rel] != null ? reps[rel] : null); });
     }).catch(function (e) {
       busy = ''; render();
       toast('수집 결과를 자동으로 열지 못했습니다(' + e.message + '). 「수집 폴더 열기」로 그 폴더를 골라 주세요.', true);
@@ -358,6 +381,7 @@
           cs.skippedFolders.length ? h('li', null, '읽지 않은 폴더: ' + cs.skippedFolders.map(function (f) { return f.replace(/^\\\\[^\\]+\\/, ''); }).join(', ')) : null,
           cs.duplicates ? h('li', null, 'Online 과 .pst 에 함께 있던 같은 메일 ' + cs.duplicates + '통은 한 번만 담았습니다.') : null,
           cs.warnings.map(function (w) { return h('li', { class: 'warn-text' }, w); })),
+        st.rollup.found.length ? h('p', { class: 'alert info' }, '받은 메일에서 업무보고 파일(.json) ' + st.rollup.found.length + '개를 찾았습니다. ', h('a', { href: '#/rollup' }, '「08 보고서 취합」에서 불러오기')) : null,
         cover && !cover.ok ? h('p', { class: 'alert warn' }, '고른 보고 기간(' + p.start + ' ~ ' + p.end + ')이 수집한 기간보다 넓습니다(' + cover.missing.join(', ') + ' 의 메일이 없음). ' + (s.type === 'monthly' ? '월간보고.bat' : '주간보고.bat') + ' 로 다시 모아 주세요.') : null);
     }
 
@@ -680,8 +704,24 @@
   function exportPackage(rep) {
     if (!st.settings.author) { toast('「01 보고 설정」에서 작성자 이름을 먼저 적어 주세요. 받는 사람이 누구의 보고인지 알 수 있게 파일에 넣습니다.', true); return; }
     var pkg = R.makePackage(rep, { level: st.settings.level, author: st.settings.author, unit: st.settings.title, generatedAt: nowStamp() });
-    download(R.packageFileName(pkg).replace(/\.json$/, fileTag() + '.json'), new Blob([JSON.stringify(pkg, null, 1)], { type: 'application/json' }));
-    toast('보고서 파일을 내려받았습니다. ' + (R.nextLevel(st.settings.level) || '받는 사람') + '에게 메일로 첨부하거나 공유 폴더에 두세요.');
+    var name = R.packageFileName(pkg).replace(/\.json$/, fileTag() + '.json');
+    download(name, new Blob([JSON.stringify(pkg, null, 1)], { type: 'application/json' }));
+    sendGuide(pkg, name, R.nextLevel(st.settings.level));
+  }
+  /* 내려받은 뒤 — 메일에 첨부해 윗단계로 보내는 짧은 안내(2026-09-30 「메일로 송/수신」). 이 도구는 메일을 보내지 않습니다 */
+  function sendGuide(pkg, name, up) {
+    var d = R.mailDraft(pkg, name);
+    dialog('보고서 파일을 메일로 보내기', [
+      h('p', null, '내려받은 파일: ', h('strong', null, name), h('br'), h('small', { class: 'note' }, '브라우저의 「다운로드」 폴더에 있습니다.')),
+      h('ol', null,
+        h('li', null, 'Outlook 에서 새 메일을 열거나, 보고 요청 메일에 「회신」을 누릅니다. 받는 사람에 ' + (up || '받는 사람') + '을(를) 넣습니다.'),
+        h('li', null, '「파일 첨부」 → 다운로드 폴더의 위 파일을 고릅니다(파일을 메일 창으로 끌어다 놓아도 됩니다).'),
+        h('li', null, '보내기. 받는 사람이 주간보고.bat(월간보고.bat)로 메일을 모으면 「08 보고서 취합」에 이 파일이 자동으로 나타납니다.')),
+      h('p', { class: 'note' }, '아래 버튼은 제목 · 본문만 채운 새 메일을 엽니다. 메일 링크(mailto)로는 파일을 첨부할 수 없어서 2번은 직접 해 주세요. 기본 메일 프로그램이 Outlook 이 아니면 다른 프로그램이 열릴 수 있습니다.'),
+      h('div', { class: 'btn-row' },
+        h('a', { class: 'btn btn-primary', href: d.href }, '제목을 채운 새 메일 열기'),
+        h('button', { class: 'btn', type: 'button', onclick: function () { copyText(d.subject); } }, '메일 제목 복사')),
+      h('p', { class: 'note' }, '제목: ' + d.subject)]);
   }
   function fname(rep, ext) { return (rep.type === 'monthly' ? '월간업무보고_' : '주간업무보고_') + (rep.period ? rep.period.start.replace(/-/g, '') : '') + (rep.approved ? '' : '_초안') + fileTag() + '.' + ext; }
   function exportXlsx(rep) {
@@ -770,14 +810,46 @@
     if (!ru.sources.length && !own) return null;
     return R.mergePackages(ru.sources, { level: st.settings.level, author: st.settings.author, unit: st.settings.title, now: nowStamp(), approved: ru.approved, own: own, boardStyle: st.settings.boardStyle });
   }
+  function sameSource(a, b) { return a.author === b.author && a.unit === b.unit && a.period.start === b.period.start && a.generatedAt === b.generatedAt; }
+  function addPackage(p) { st.rollup.sources = st.rollup.sources.filter(function (x) { return !sameSource(x, p); }); st.rollup.sources.push(p); }
+  /* 받은 메일에서 찾은 보고서 파일 — 고른 것 불러오기 */
+  var foundPick = {};
+  function foundDefault(f) { return !f.mine && !st.rollup.sources.some(function (x) { return sameSource(x, f.pkg); }); }
+  function loadFound() {
+    var list = st.rollup.found.filter(function (f) { return foundPick[f.key] != null ? foundPick[f.key] : foundDefault(f); });
+    if (!list.length) { toast('불러올 파일을 골라 주세요.', true); return; }
+    list.forEach(function (f) { addPackage(Object.assign(JSON.parse(JSON.stringify(f.pkg)), { _name: f.name + ' (메일 ' + f.day.slice(5) + ' ' + f.time + ' · ' + f.from + ')' })); });
+    foundPick = {}; st.rollup.approved = null; save(); render();
+    toast('받은 메일의 보고서 파일 ' + list.length + '개를 넣었습니다.');
+  }
+  function foundSection() {
+    var fl = st.rollup.found;
+    if (!fl.length) return st.collect ? h('p', { class: 'note' }, '최근에 모은 메일(' + (st.collect.period ? st.collect.period.start + ' ~ ' + st.collect.period.end : '') + ')에는 업무보고 파일(.json)이 첨부된 메일이 없습니다. 보고서 파일을 메일로 받았다면 그 기간으로 다시 모으거나, 아래에서 파일을 직접 골라 주세요.') : null;
+    var picked = fl.filter(function (f) { return foundPick[f.key] != null ? foundPick[f.key] : foundDefault(f); }).length;
+    return h('div', { class: 'found' },
+      h('h3', null, '받은 메일에서 찾은 보고서 파일 ' + fl.length + '개'),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'list' },
+        h('thead', null, h('tr', null, ['', '보낸이 · 받은 때', '보고자 · 단위', '기간', '상태', '첨부 파일'].map(function (x) { return h('th', null, x); }))),
+        h('tbody', null, fl.map(function (f) {
+          var inAlready = st.rollup.sources.some(function (x) { return sameSource(x, f.pkg); });
+          var cb = h('input', { type: 'checkbox', 'aria-label': f.name + ' 고르기', checked: foundPick[f.key] != null ? foundPick[f.key] : foundDefault(f), onchange: function (e) { foundPick[f.key] = e.target.checked; render(); } });
+          return h('tr', null, h('td', null, cb),
+            h('td', null, (f.mine ? '내가 보냄 → ' : '') + f.from, h('div', { class: 'note' }, f.day + ' ' + f.time)),
+            h('td', null, f.pkg.author + (f.pkg.unit ? ' · ' + f.pkg.unit : '') + (f.pkg.rollup ? ' (취합본)' : '')),
+            h('td', { class: 'nowrap' }, (f.pkg.type === 'monthly' ? '월간 ' : '주간 ') + f.pkg.period.start + ' ~ ' + f.pkg.period.end),
+            h('td', null, h('span', { class: 'tag' + (f.pkg.approved ? ' ok' : ' warn') }, f.pkg.approved ? '승인' : '초안'), inAlready ? h('span', { class: 'tag muted' }, '이미 넣음') : null),
+            h('td', null, h('span', { class: 'note' }, f.name)));
+        })))),
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn btn-primary', type: 'button', disabled: !picked, onclick: loadFound }, '받은 메일에서 찾은 보고서 파일 ' + picked + '개 불러오기')),
+      h('p', { class: 'note' }, '주간보고.bat(월간보고.bat)로 모은 메일의 첨부 중 이 도구가 만든 보고서 파일만 골랐습니다(다른 .json 은 뺌). 내가 보낸 메일의 파일은 처음에 고르지 않습니다.'));
+  }
   function addRollupFiles(fileList) {
     var files = Array.prototype.slice.call(fileList || []), bad = [], added = 0;
     Promise.all(files.map(function (f) {
       return RD.fileText(f).then(function (t) {
         try {
           var p = R.parsePackage(t); p._name = f.name;
-          st.rollup.sources = st.rollup.sources.filter(function (x) { return !(x.author === p.author && x.unit === p.unit && x.period.start === p.period.start && x.generatedAt === p.generatedAt); });
-          st.rollup.sources.push(p); added++;
+          addPackage(p); added++;
         } catch (e) { bad.push(f.name + ' — ' + e.message); }
       });
     })).then(function () {
@@ -829,11 +901,11 @@
             if (!st.settings.author) { toast('「01 보고 설정」에서 작성자 이름을 먼저 적어 주세요.', true); return; }
             var pkg = R.makePackage(rep, { level: lv, author: st.settings.author, unit: st.settings.title, generatedAt: nowStamp() });
             download(R.packageFileName(pkg), new Blob([JSON.stringify(pkg, null, 1)], { type: 'application/json' }));
-            toast('취합 보고서 파일을 내려받았습니다. ' + up + '에게 메일로 첨부하거나 공유 폴더에 두세요.');
+            sendGuide(pkg, R.packageFileName(pkg), up);
           } }, '취합 보고서 파일(.json) — ' + up + '에게') : null) : null),
       lv === '팀원' ? h('p', { class: 'alert info' }, '지금 보고 단계가 「팀원」입니다. 팀원은 「06 보고서」에서 보고서 파일을 내려받아 파트리더에게 보내면 됩니다. 파트리더 · 팀장 · 임원이면 ',
         h('a', { href: '#/setup' }, '「01 보고 설정」'), '에서 보고 단계를 바꿔 주세요.') : null,
-      h('section', { class: 'card step' }, h('h2', null, h('span', { class: 'step-no' }, '1'), '받은 보고서 파일 넣기'), drop, list, h('div', { class: 'btn-row' }, own,
+      h('section', { class: 'card step' }, h('h2', null, h('span', { class: 'step-no' }, '1'), '받은 보고서 파일 넣기'), foundSection(), drop, list, h('div', { class: 'btn-row' }, own,
         ru.sources.length ? h('button', { class: 'btn btn-danger', type: 'button', onclick: function () { confirmBox('모두 빼기', '넣은 보고서 파일 ' + ru.sources.length + '개를 모두 뺄까요? 받은 원본 파일은 그대로 있습니다.', '모두 빼기', function () { st.rollup = L.emptyRollup(); save(); render(); }, true); } }, '모두 빼기') : null)),
       r && r.skipped.length ? h('div', { class: 'alert warn' }, h('strong', null, '취합에서 뺀 파일'), h('ul', null, r.skipped.map(function (x) { return h('li', null, x.name + ' — ' + x.reason); }))) : null,
       r && r.warnings.length ? h('div', { class: 'alert info' }, h('ul', null, r.warnings.map(function (w) { return h('li', null, w); }))) : null,
@@ -846,7 +918,20 @@
         h('p', { class: 'note' }, '고칠 내용이 있으면 그 보고자에게 알려 다시 받는 것이 가장 정확합니다(취합 화면에서는 문장을 고치지 않습니다).'),
         h('div', { class: 'btn-row' }, ru.approved ? [h('span', { class: 'tag ok' }, '승인됨 ' + ru.approved), h('button', { class: 'btn', type: 'button', onclick: function () { ru.approved = null; save(); render(); } }, '승인 취소')] :
           h('button', { class: 'btn btn-primary', type: 'button', onclick: function () { ru.approved = nowStamp(); save(); toast('승인했습니다. 이제 내려받은 파일에는 「초안」 표시가 빠집니다.'); render(); } }, '취합 보고서 승인'))) : null,
+      rep ? execCard(rep) : null,
       paper);
+  }
+  /* 임원 보고용 요약 — 임시 양식(2026-09-30 「담당 임원에게는 다른 양식으로」 — 실제 양식을 받기 전까지) */
+  function execCard(rep) {
+    var m = R.execSummary(rep, { unit: st.settings.title }), html = R.execSummaryHtml(m);
+    var base = (rep.type === 'monthly' ? '월간' : '주간') + '_임원보고요약_' + rep.period.start.replace(/-/g, '') + '_임시양식' + (rep.approved ? '' : '_초안');
+    return h('section', { class: 'card step no-print' }, h('h2', null, h('span', { class: 'step-no' }, '3'), '임원 보고용(요약)'),
+      h('p', { class: 'alert warn' }, h('strong', null, R.EXEC_NOTE), ' — 담당 임원에게는 다른 양식으로 보고한다고 들었습니다. 그 양식(빈 양식 또는 내용을 지운 샘플)을 받기 전까지 쓰는 한 장짜리 요약입니다.'),
+      h('p', { class: 'note' }, '파트(보고 단위)마다 건수와 핵심 실적 · 주요 이슈 · ' + m.nextLabel + '을 3건씩 뽑았습니다. 핵심 실적은 완료 먼저, 이슈는 의사결정 필요 → 지연 순입니다. 더 있으면 「외 N건」으로 적습니다.'),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn btn-primary', type: 'button', onclick: function () { download(base + '.doc', new Blob(['\ufeff' + html], { type: 'application/msword' })); } }, '임원 보고용(요약) — Word(.doc)'),
+        h('button', { class: 'btn', type: 'button', onclick: function () { download(base + '.html', new Blob([html], { type: 'text/html' })); } }, 'HTML')),
+      h('details', null, h('summary', null, '미리보기'), h('iframe', { class: 'exec-preview', title: '임원 보고용 요약 미리보기', srcdoc: html })));
   }
 
   /* ── 예시 ─────────────────────────────── */
