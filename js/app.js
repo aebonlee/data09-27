@@ -1,5 +1,6 @@
 /* 업무보고 자동생성 Agent · 화면 (data09-10 과제 B 의 report-app.js 를 이어 씀)
-   메뉴: 01 보고 설정 · 02 메일 자동 수집 · 보고서(첫 화면 — 주간·월간 고르기 → 수집 폴더 → 보고서 만들기)
+   메뉴: 00 한눈에 보기(첫 화면 — 흐름 · 지금 할 일 · 설정 상태, 2026-09-30 메인 디자인) · 01 보고 설정
+   02 메일 자동 수집 · 보고서(주간·월간 고르기 → 수집 폴더 → 보고서 만들기, .bat 자동 열기는 여기로)
    03 업무 그룹 · 04 실적·계획·이슈 · 05 이전 계획 대비 · 06 보고서 · 07 이력·백업 · 08 보고서 취합
    평소에는 주간보고.bat(월간보고.bat) → 02 → 06 만 씁니다. 03~05 는 고칠 것이 있을 때만 엽니다.
    08 은 파트리더 · 팀장 · 임원이 아래 단계의 보고서 파일을 모아 한 장으로 만들 때 씁니다(2026-09-30 답변). */
@@ -147,6 +148,7 @@
 
   /* ── 머리·메뉴 ───────────────────────── */
   var NAV = [
+    ['#/home', '00', '한눈에 보기', '흐름 · 지금 할 일 · 설정 상태'],
     ['#/setup', '01', '보고 설정', '보고자 · 프로젝트 · AI 연결'],
     ['#/make', '02', '메일 자동 수집 · 보고서', '주간·월간 → 보고서 만들기'],
     ['#/tasks', '03', '업무 그룹', '제목·프로젝트로 묶기'],
@@ -157,7 +159,7 @@
     ['#/rollup', '08', '보고서 취합', '파트리더 · 팀장 · 임원']
   ];
   function renderChrome(route) {
-    route = route || location.hash || '#/make';
+    route = normRoute(route || location.hash);
     var nav = document.getElementById('nav'); nav.innerHTML = '';
     var p = period(), inP = periodMails().length;
     var check = st.items.filter(function (x) { return !x.excluded && !x.reviewed && (x.status === '확인 필요' || x.explicit === false || !x.evidence.length); }).length;
@@ -177,6 +179,118 @@
     var ban = document.getElementById('sampleBanner');
     ban.hidden = !st._sample; ban.innerHTML = '';
     if (st._sample) append(ban, [h('strong', null, '예시 데이터'), ' — 메일 · 첨부 · 인물 · 업무는 모두 가상(example.com)입니다. ', h('a', { href: '#/history' }, '예시 데이터 지우기')]);
+  }
+
+  /* 주소 정리 — 빈 주소 · 「#/」는 첫 화면(00 한눈에 보기). .bat 의 자동 열기(#/make?collect=…)는 그대로 02 로 갑니다 */
+  function normRoute(r) { return !r || r === '#' || r === '#/' ? '#/home' : r; }
+
+  /* ── 00 한눈에 보기 (첫 화면, 2026-09-30 「메인디자인 요청드립니다」) ──
+     흐름 다섯 단계(기간 선택 → Outlook 메일 모으기 → 초안 생성 → 보고서 취합 → 임원 보고)를
+     지금 상태로 보여 주고, 각 단계의 화면으로 바로 들어갑니다. 설정 상태(작성자 · 보고 단계 · AI 연결)도 한곳에. */
+  function checkCount() {
+    return st.items.filter(function (x) { return !x.excluded && !x.reviewed && (x.status === '확인 필요' || x.explicit === false || !x.evidence.length); }).length;
+  }
+  function homeFlow() {
+    var p = period(), cs = st.collect, lv = st.settings.level || '팀원', ru = st.rollup || { sources: [], found: [] };
+    var mails = st.mails.length, inP = periodMails().length, items = st.items.filter(function (x) { return !x.excluded; }).length, check = checkCount();
+    var up = lv === '팀장' || lv === '임원';
+    var steps = [
+      { no: '1', t: '기간 선택', s: '주간 · 월간과 보고 기간', href: '#/make', go: '주간 · 월간 고르기',
+        done: true, now: (st.settings.type === 'monthly' ? '월간' : '주간') + ' · ' + (p ? p.start.slice(5) + ' ~ ' + p.end.slice(5) : '기간 미지정') },
+      { no: '2', t: 'Outlook 메일 모으기', s: '회사 PC 에서 주간보고.bat 더블클릭', href: '#/make', go: '모은 메일 열기',
+        done: mails > 0, now: mails ? '메일 ' + mails + '통 · 기간 안 ' + inP + '통' + (cs && cs.attachments ? ' · 첨부 ' + cs.attachments.total + '개' : '') : '아직 모은 메일 없음' },
+      { no: '3', t: '초안 생성', s: '실적 · 계획 · 이슈 → 주간보고 양식 표', href: st.items.length ? '#/report' : '#/make', go: st.items.length ? '보고서 초안 보기' : '보고서 만들기',
+        done: items > 0 && !!st.approved, now: items ? '항목 ' + items + '건' + (check ? ' · 확인 필요 ' + check + '건' : '') + (st.approved ? ' · 승인됨' : ' · 승인 전') : '아직 초안 없음' },
+      { no: '4', t: '보고서 취합', s: '받은 보고서 파일을 한 장으로', href: '#/rollup', go: '보고서 취합',
+        done: ru.sources.length > 0 && !!ru.approved, now: lv === '팀원' ? '팀원은 06 보고서에서 파일을 보내면 끝' : ru.sources.length ? '받은 보고서 ' + ru.sources.length + '개' + (ru.approved ? ' · 승인됨' : ' · 승인 전') : (ru.found && ru.found.length ? '받은 메일에서 ' + ru.found.length + '개 찾음 · 불러오기 전' : '받은 보고서 없음') },
+      { no: '5', t: '임원 보고', s: '임원 보고용(요약) · Word · Excel', href: '#/rollup', go: '임원 보고용 요약',
+        done: false, now: up ? (ru.sources.length ? (ru.approved ? '요약을 내려받을 수 있음' : '취합 보고서 승인 후 내려받기') : '취합한 뒤 만들 수 있음') : '팀장 단계에서 씀' }
+    ];
+    // 윗단계 몫: 팀원은 4 · 5, 파트리더는 5 를 건너뜀
+    steps.forEach(function (x) { x.skip = (lv === '팀원' && (x.no === '4' || x.no === '5')) || (lv === '파트리더' && x.no === '5'); });
+    var cur = steps.filter(function (x) { return !x.skip && !x.done; })[0] || null;
+    return { steps: steps, cur: cur, check: check, lv: lv };
+  }
+  function viewHome() {
+    var s = st.settings, f = homeFlow(), lv = f.lv, p = period(), E = window.AIEndpoint, cfg = E ? E.load() : null;
+    var aiReady = !!(cfg && E.isReady(cfg)), hist = (st.history || []).length, ru = st.rollup || { sources: [], found: [] };
+    var up = R.nextLevel(lv);
+    var next = f.cur && f.cur.no === '3' && st.items.length ? { t: '초안 검토 · 승인', href: '#/report', go: '06 보고서로' } : f.cur || (lv === '팀원' || lv === '파트리더'
+      ? { t: '보고서 파일 보내기', href: lv === '팀원' ? '#/report' : '#/rollup', go: lv === '팀원' ? '06 보고서로' : '08 보고서 취합으로' }
+      : { t: '임원 보고용 요약 내려받기', href: '#/rollup', go: '08 보고서 취합으로' });
+    var nextText = !f.cur ? (up ? '준비됐습니다. 검토 · 승인한 뒤 보고서 파일(.json)을 ' + up + '에게 메일로 보내 주세요.' : '취합 보고서가 준비됐습니다. Word · Excel 로 내려받아 주세요.') :
+      f.cur.no === '2' ? '회사 PC 에서 압축을 푼 폴더의 주간보고.bat(월간은 월간보고.bat)를 더블클릭하면 메일을 모아 이 도구를 자동으로 엽니다. Outlook 이 없는 PC 에서는 예시로 먼저 둘러보세요.' :
+      f.cur.no === '3' ? (st.items.length ? '초안이 만들어졌습니다. 「06 보고서」에서 확인 필요 ' + f.check + '건을 살피고 승인해 주세요. 승인한 보고서는 다음 보고의 「이전 계획」이 됩니다.' : '모은 메일로 「보고서 만들기」를 누르면 업무별로 묶은 주간보고 초안이 만들어집니다.') :
+      f.cur.no === '4' ? '아래 단계에서 보낸 보고서 파일을 「08 보고서 취합」에서 불러와 한 장으로 모으고 승인해 주세요.' :
+      '취합 보고서가 승인됐습니다. 「08 보고서 취합」의 임원 보고용(요약) · Word · Excel 로 담당 임원께 보고해 주세요.';
+
+    function stepCard(x) {
+      var state = x.skip ? 'upper' : x.done ? 'done' : (f.cur && f.cur.no === x.no ? 'now' : 'todo');
+      var label = { upper: '윗단계 몫', done: '완료', now: '지금 할 일', todo: '다음' }[state];
+      return h('li', { class: 'flow-step ' + state },
+        h('div', { class: 'flow-top' }, h('span', { class: 'flow-no', 'aria-hidden': 'true' }, x.no), h('span', { class: 'flow-state' }, label)),
+        h('h3', null, h('span', { class: 'sr' }, x.no + '단계 '), x.t),
+        h('p', { class: 'flow-sub' }, x.s),
+        h('p', { class: 'flow-now' }, x.now),
+        h('a', { class: 'flow-go', href: x.href }, x.go));
+    }
+    function row(k, v, ok, href, fix) {
+      return h('div', { class: 'stat-row' }, h('dt', null, k),
+        h('dd', null, h('span', { class: 'dot ' + (ok ? 'ok' : 'warn'), 'aria-hidden': 'true' }),
+          h('span', { class: 'stat-v' }, h('span', { class: 'sr' }, ok ? '설정됨: ' : '확인 필요: '), v),
+          href ? h('a', { href: href, class: 'stat-fix' }, fix || '바꾸기') : null));
+    }
+    var menus = NAV.slice(1).map(function (n) {
+      return h('a', { class: 'menu-card', href: n[0] }, h('span', { class: 'menu-no' }, n[1]), h('span', { class: 'menu-t' }, n[2]), h('span', { class: 'menu-s' }, n[3]));
+    });
+    menus.push(h('a', { class: 'menu-card', href: 'guide.html' }, h('span', { class: 'menu-no' }, '안내'), h('span', { class: 'menu-t' }, '처음 쓰는 법 · 막힐 때'), h('span', { class: 'menu-s' }, 'ZIP 받기 · 차단 해제 · 첫 실행 확인')));
+
+    return h('div', { class: 'home' },
+      h('section', { class: 'hero', 'aria-labelledby': 'heroTitle' },
+        h('div', { class: 'hero-text' },
+          h('p', { class: 'hero-eyebrow' }, '00 · Overview'),
+          h('h1', { id: 'heroTitle' }, '메일에서 업무보고까지, 한 흐름으로'),
+          h('p', { class: 'hero-lead' }, '회사 PC 의 클래식 Outlook 에서 기간 안 메일과 첨부를 모아, 근거 메일이 붙은 주간 · 월간 보고서 초안을 만듭니다.'),
+          h('p', { class: 'hero-lead' }, '팀원 → 파트리더 → 팀장 → 담당 임원 순서로 취합하며, 메일과 첨부는 이 PC 안에서만 읽습니다.'),
+          h('div', { class: 'hero-actions' },
+            h('a', { class: 'btn btn-hero', href: '#/make' }, st.mails.length ? '메일 · 보고서 화면으로' : '보고서 만들기 시작'),
+            h('button', { class: 'btn btn-ghost', type: 'button', onclick: function () { location.hash = '#/make'; loadSample(); } }, '예시 수집 결과로 해 보기'),
+            h('a', { class: 'btn btn-ghost', href: 'guide.html' }, '처음 쓰는 법'))),
+        h('div', { class: 'hero-next' },
+          h('p', { class: 'hero-next-k' }, '지금 할 일'),
+          h('p', { class: 'hero-next-t' }, next.t),
+          h('p', { class: 'hero-next-s' }, nextText),
+          h('a', { class: 'btn btn-hero', href: next.href }, next.go))),
+
+      h('section', { class: 'card', 'aria-labelledby': 'flowTitle' },
+        h('div', { class: 'sec-head' }, h('h2', { id: 'flowTitle' }, '업무보고 흐름'),
+          h('p', { class: 'note' }, '평소에는 1 → 2 → 3 만 씁니다. 4 · 5 는 파트리더 · 팀장이 아래 단계의 보고서 파일을 모을 때 씁니다. 내 보고 단계: ', h('strong', null, lv))),
+        h('ol', { class: 'flow' }, f.steps.map(stepCard))),
+
+      h('div', { class: 'home-grid' },
+        h('section', { class: 'card', 'aria-labelledby': 'statTitle' },
+          h('h2', { id: 'statTitle' }, '현재 설정 상태'),
+          h('dl', { class: 'stat-list' },
+            row('보고 주기 · 기간', [(s.type === 'monthly' ? '월간보고' : '주간보고') + ' · ', h('span', { class: 'nowrap' }, p ? p.start + ' ~ ' + p.end : '-')], true, '#/make'),
+            row('작성자 · 보고 단위', (s.author || '작성자 미입력') + (s.title ? ' · ' + s.title : ''), !!s.author, '#/setup', s.author ? '바꾸기' : '적기'),
+            row('보고 단계', lv + (up ? ' → ' + up + '에게 보고' : ' (보고를 받음)'), true, '#/setup'),
+            row('프로젝트 · 키워드', st.projects.length ? st.projects.length + '개 등록' : '등록 없음 — 제목의 [대괄호]로만 묶음', st.projects.length > 0, '#/setup', st.projects.length ? '바꾸기' : '등록'),
+            row('AI 연결 설정', aiReady ? '자동 보내기 켜짐 · ' + E.describe(cfg) : '반자동(프롬프트 복사) · 사내 LLM 주소 미입력' + (cfg && cfg.model ? ' · 모델 ' + cfg.model : ''), aiReady, '#/setup', aiReady ? '바꾸기' : '연결 설정'),
+            row('승인 이력', hist ? hist + '건 — 다음 보고의 「이전 계획」에 씀' : '없음 — 승인하면 다음 보고 때 비교', hist > 0, '#/history', '이력 · 백업'),
+            row('저장 위치', storeOk ? '이 브라우저(내 PC) · 서버로 보내지 않음' : '메모리에만 보관 중 — JSON 백업을 받아 두세요', storeOk, storeOk ? null : '#/history', 'JSON 백업'))),
+        h('section', { class: 'card', 'aria-labelledby': 'numTitle' },
+          h('h2', { id: 'numTitle' }, '이번 기간 현황'),
+          h('div', { class: 'kpis' },
+            h('div', { class: 'kpi' }, h('span', { class: 'kpi-k' }, '모은 메일'), h('span', { class: 'kpi-v' }, st.mails.length), h('span', { class: 'kpi-s' }, '기간 안 ' + periodMails().length + '통')),
+            h('div', { class: 'kpi' }, h('span', { class: 'kpi-k' }, '업무 항목'), h('span', { class: 'kpi-v' }, st.items.filter(function (x) { return !x.excluded; }).length), h('span', { class: 'kpi-s' }, '실적 · 계획 · 이슈')),
+            h('div', { class: 'kpi' + (f.check ? ' warn' : '') }, h('span', { class: 'kpi-k' }, '확인 필요'), h('span', { class: 'kpi-v' }, f.check), h('span', { class: 'kpi-s' }, f.check ? h('a', { href: '#/classify' }, '확인하러 가기') : '남은 확인 없음')),
+            h('div', { class: 'kpi' }, h('span', { class: 'kpi-k' }, '받은 보고서'), h('span', { class: 'kpi-v' }, ru.sources.length), h('span', { class: 'kpi-s' }, ru.found && ru.found.length ? '메일에서 ' + ru.found.length + '개 찾음' : '08 보고서 취합'))),
+          h('p', { class: 'note' }, st.approved ? '내 보고서는 ' + st.approved + ' 에 승인했습니다.' : st.items.length ? '내 보고서는 아직 승인 전입니다. 「06 보고서」에서 검토 · 승인해 주세요.' : '보고서를 만들면 여기에 건수가 나옵니다.'))),
+
+      h('section', { class: 'card', 'aria-labelledby': 'menuTitle' },
+        h('h2', { id: 'menuTitle' }, '모든 메뉴'),
+        h('p', { class: 'note' }, '03 · 04 · 05 는 고칠 것이 있을 때만 엽니다.'),
+        h('div', { class: 'menu-grid' }, menus)));
   }
 
   /* ── 01 보고 설정 ─────────────────────── */
@@ -950,11 +1064,12 @@
 
   /* ── 라우팅 ───────────────────────────── */
   function render() {
-    var route = location.hash || '#/make';
+    var route = normRoute(location.hash);
     renderChrome(route);
     main.innerHTML = '';
     var v;
-    if (route.indexOf('#/mail/') === 0) v = viewMail(decodeURIComponent(route.slice(7)));
+    if (route === '#/home') v = viewHome();
+    else if (route.indexOf('#/mail/') === 0) v = viewMail(decodeURIComponent(route.slice(7)));
     else if (route === '#/setup') v = viewSetup();
     else if (route === '#/tasks') v = viewTasks();
     else if (route === '#/classify') v = viewClassify();
