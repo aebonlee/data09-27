@@ -44,7 +44,7 @@ const TEAM = { name: '팀 공지(가상)', email: 'team@example.com' };
 const ONLINE = 'me@example.com (가상)', PST = 'Mail backup (가상)';
 const utc = (day, time) => new Date(day + 'T' + time + ':00+09:00').toISOString();
 const MAILS = [
-  { id: 'M0001', store: ONLINE, storeKind: 'online', folder: '받은 편지함\\캡 인테리어', direction: 'received', messageId: 'cab-101@example.com',
+  { id: 'M0001', store: ONLINE, storeKind: 'online', folder: '받은 편지함', direction: 'received', messageId: 'cab-101@example.com',
     from: LEAD, to: [ME], day: '2026-09-21', time: '09:12', subject: '[캡 인테리어 개선] 1차 시안 검토 회의 결과 공유',
     body: '안녕하세요.\r\n오늘 1차 시안 검토 회의를 마쳤습니다.\r\n시안 3종 검토 완료했고, B안을 최종 시안으로 선정했습니다.\r\n차주에는 B안 기준으로 3D 모델링 업데이트를 진행할 예정입니다(10/2까지).\r\n회의록과 B안 렌더링을 첨부합니다.\r\n\r\n디자인팀장(가상) 드림',
     atts: ['캡_1차시안_검토회의록.docx', 'B안_렌더링_정면.png'] },
@@ -60,7 +60,7 @@ const MAILS = [
   { id: 'M0005', store: ONLINE, storeKind: 'online', folder: '보낸 편지함', direction: 'sent', messageId: 'expo-301@example.com',
     from: ME, to: [EXPO], cc: [LEAD], day: '2026-09-24', time: '16:20', subject: '[전시회 준비] 부스 렌더링 v2 배포',
     body: '전시 부스 렌더링 v2를 배포합니다.\r\n조명 위치를 조정했고 관람 동선 안을 반영했습니다.\r\n의견은 9/29까지 회신 부탁드립니다.', atts: ['전시부스_렌더링_v2.pptx', '부스_투시도_v2.png', '로고_시안_B안.ai'] },
-  { id: 'M0006', store: ONLINE, storeKind: 'online', folder: '받은 편지함\\캡 인테리어', direction: 'received', messageId: 'cab-103@example.com', references: ['cab-101@example.com'],
+  { id: 'M0006', store: ONLINE, storeKind: 'online', folder: '받은 편지함', direction: 'received', messageId: 'cab-103@example.com', references: ['cab-101@example.com'],
     from: VENDOR2, to: [ME], day: '2026-09-25', time: '11:00', subject: '[캡 인테리어 개선] 조작부 치수 도면 회신',
     body: '요청하신 조작부 치수 도면을 첨부합니다.\r\n버튼 간격은 기존보다 2mm 넓어졌습니다.\r\n최종 확정은 내부 검토 후 10/1까지 알려 드리겠습니다.', atts: ['조작부_치수도면_Rev2.pdf', '이전_회의록.doc'] },
   { id: 'M0007', store: ONLINE, storeKind: 'online', folder: '받은 편지함', direction: 'received', messageId: 'team-401@example.com',
@@ -99,10 +99,11 @@ const MAILS = [
     generatedAt: '2026-09-25 18:00', computer: 'EXAMPLE-PC',
     period: { type: 'weekly', start: '2026-09-21', end: '2026-09-27', weekStart: 1, label: '2026-09-21 ~ 2026-09-27' },
     stores: [
-      { name: ONLINE, kind: 'online', path: 'C:\\Users\\user\\AppData\\Local\\Microsoft\\Outlook\\me@example.com (가상).ost', folders: 9, mails: 5, added: false },
-      { name: PST, kind: 'pst', path: 'D:\\메일백업(가상)\\Mail backup.pst', folders: 24, mails: 2, added: false }
+      // Online 사서함은 받은 편지함 · 보낸 편지함 두 폴더만(수집설정.txt 의 Online폴더=받은보낸 — 2026-09-30 답변), .pst 는 모든 메일 폴더
+      { name: ONLINE, kind: 'online', path: 'C:\\Users\\user\\AppData\\Local\\Microsoft\\Outlook\\me@example.com (가상).ost', scope: 'inbox-sent', folders: 2, mails: 5, added: false },
+      { name: PST, kind: 'pst', path: 'D:\\메일백업(가상)\\Mail backup.pst', scope: 'all', folders: 24, mails: 2, added: false }
     ],
-    skippedFolders: ['\\\\' + ONLINE + '\\지운 편지함', '\\\\' + ONLINE + '\\정크 메일', '\\\\' + ONLINE + '\\임시 보관함', '\\\\' + PST + '\\지운 편지함'],
+    skippedFolders: ['\\\\' + PST + '\\지운 편지함'],
     duplicates: 1,
     warnings: [],
     mails
@@ -111,7 +112,7 @@ const MAILS = [
   fs.writeFileSync(path.join(OUT, 'manifest.json'), json + '\n');
   fs.writeFileSync(path.join(OUT, 'manifest.js'), 'window.P27_COLLECT = ' + json + ';\n');
   fs.writeFileSync(path.join(OUT, 'pdfdata.js'), 'window.P27_PDF = ' + JSON.stringify(pdfData) + ';\n');
-  fs.writeFileSync(path.join(OUT, '수집기록.txt'), '업무보고 자동수집 기록(가상 예시)\r\n기간: 주간 2026-09-21 ~ 2026-09-27\r\n데이터 파일: ' + ONLINE + ' [online] — 메일 5통\r\n데이터 파일: ' + PST + ' [pst] — 메일 2통\r\n뺀 폴더: 지운 편지함 · 정크 메일 · 임시 보관함\r\n같은 메일 한 번만: 1통\r\n');
+  fs.writeFileSync(path.join(OUT, '수집기록.txt'), '업무보고 자동수집 기록(가상 예시)\r\n기간: 주간 2026-09-21 ~ 2026-09-27\r\n데이터 파일: ' + ONLINE + ' [online] — 메일 5통\r\n데이터 파일: ' + PST + ' [pst] — 메일 2통\r\nOnline 사서함: 받은 편지함 · 보낸 편지함만\r\n뺀 폴더: .pst 의 지운 편지함\r\n같은 메일 한 번만: 1통\r\n');
 
   const sample = {
     manifest, pdf: pdfData,

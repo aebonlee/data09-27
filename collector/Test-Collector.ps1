@@ -44,6 +44,9 @@ $p = Get-ReportPeriod 'monthly' ([datetime]'2026-01-15') 'last' 1; Check ($p.sta
 $s = Read-CollectSettingsText ([IO.File]::ReadAllText((Join-Path $PSScriptRoot '수집설정.txt'), [Text.Encoding]::UTF8))
 Check ($s['첨부최대MB'] -eq '30' -and $s['_unknown'].Count -eq 0) '수집설정.txt 읽기'
 Check ((Get-SkipFolderNames $s) -contains '지운 편지함') '지운 편지함은 늘 뺌'
+Check ($s['Online폴더'] -eq '받은보낸' -and (Get-OnlineScope $s).scope -eq 'inbox-sent') 'Online폴더 기본값 = 받은 편지함 · 보낸 편지함만'
+$os = @(foreach ($v in '받은보낸', '받은 · 보낸', '받은보낸하위', '전체', '', '모두') { $r = Get-OnlineScope @{ 'Online폴더' = $v }; $r.scope + '/' + $r.ok })
+Check (($os -join ',') -eq 'inbox-sent/True,inbox-sent/True,inbox-sent-sub/True,all/True,inbox-sent/True,inbox-sent/False') ('Online폴더 값 읽기(모르는 값은 기본값 + 알림) — ' + ($os -join ','))
 $obj = [ordered]@{ a = "줄`n바꿈 `"따옴표`" \ 역슬래시"; n = 3; ok = $true; list = @(1, 'x'); empty = @(); nested = [ordered]@{ k = $null } }
 $back = (ConvertTo-JsonText $obj) | ConvertFrom-Json
 Check ($back.a -ceq $obj.a -and $back.n -eq 3 -and $back.ok -eq $true -and $back.list.Count -eq 2 -and $null -eq $back.nested.k) 'JSON 쓰기 → 다시 읽기'

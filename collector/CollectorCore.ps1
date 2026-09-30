@@ -208,7 +208,7 @@ function Get-ReportPeriod([string]$mode, [datetime]$refDay, [string]$which = 'th
 }
 
 # ── 설정 파일 (수집설정.txt — 「이름=값」, # 은 설명) ──
-$Script:SettingDefaults = [ordered]@{ 'PST폴더' = ''; '제외폴더' = ''; '저장위치' = ''; '첨부최대MB' = '30'; '작은그림KB' = '15'; '최대메일수' = '5000'; '주시작' = '월'; '첨부저장' = '예'; 'PDF포함MB' = '60' }
+$Script:SettingDefaults = [ordered]@{ 'Online폴더' = '받은보낸'; 'PST폴더' = ''; '제외폴더' = ''; '저장위치' = ''; '첨부최대MB' = '30'; '작은그림KB' = '15'; '최대메일수' = '5000'; '주시작' = '월'; '첨부저장' = '예'; 'PDF포함MB' = '60' }
 $Script:AlwaysSkip = @('지운 편지함', 'Deleted Items', '정크 메일', '정크 전자 메일', 'Junk Email', 'Junk E-mail')
 function Read-CollectSettingsText([string]$text) {
   $out = [ordered]@{}; foreach ($k in $Script:SettingDefaults.Keys) { $out[$k] = $Script:SettingDefaults[$k] }
@@ -221,6 +221,19 @@ function Read-CollectSettingsText([string]$text) {
   }
   $out['_unknown'] = $unknown
   return $out
+}
+<# Online 사서함에서 읽을 범위 (js/collect-logic.js 의 onlineScope 와 같은 표)
+   받은보낸(기본) = 받은 편지함 · 보낸 편지함 두 폴더만 / 받은보낸하위 = 두 폴더와 그 하위 폴더 / 전체 = 모든 메일 폴더
+   모르는 값이면 기본값(받은보낸)을 쓰고 ok = $false 로 알립니다. #>
+function Get-OnlineScope($settings) {
+  $v = (([string]$settings['Online폴더']) -replace '[\s·,，+]', '')
+  switch ($v) {
+    '' { return @{ scope = 'inbox-sent'; ok = $true } }
+    '받은보낸' { return @{ scope = 'inbox-sent'; ok = $true } }
+    '받은보낸하위' { return @{ scope = 'inbox-sent-sub'; ok = $true } }
+    '전체' { return @{ scope = 'all'; ok = $true } }
+  }
+  return @{ scope = 'inbox-sent'; ok = $false }
 }
 function Get-SkipFolderNames($settings) {
   $extra = @(([string]$settings['제외폴더']) -split '[,，]' | ForEach-Object { $_.Trim() } | Where-Object { $_ })

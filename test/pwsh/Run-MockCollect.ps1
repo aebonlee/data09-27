@@ -13,10 +13,13 @@
   확인하지 못하는 것(진짜 Outlook 에서만): Restrict 날짜 형식이 PC 지역 설정과 맞는지, Exchange 주소(EX) → SMTP 바꾸기,
   Outlook 보안 확인 창, AddStoreEx 로 .pst 열기, 아주 많은 메일에서의 속도.
 
-  실행: pwsh -NoProfile -File test/pwsh/Run-MockCollect.ps1 [-Restrict ok|empty]
+  Online 사서함은 수집설정.txt 의 Online폴더 대로 읽는지도 봅니다(-OnlineScope — 기본 받은보낸 = 받은 · 보낸 편지함만).
+  두 번째 회사 계정은 기본 폴더 번호로 받은 편지함을 못 찾게 만들어, 이름으로 다시 찾는 길도 시험합니다.
+
+  실행: pwsh -NoProfile -File test/pwsh/Run-MockCollect.ps1 [-Restrict ok|empty] [-OnlineScope 받은보낸|받은보낸하위|전체]
         (Windows PowerShell 5.1 에서는 클래스 문법 때문에 PowerShell 7 을 권합니다)
 #>
-param([ValidateSet('ok', 'empty')][string]$Restrict = 'empty', [string]$OutDir = '', [switch]$Keep)
+param([ValidateSet('ok', 'empty')][string]$Restrict = 'empty', [ValidateSet('받은보낸', '받은보낸하위', '전체')][string]$OnlineScope = '받은보낸', [string]$OutDir = '', [switch]$Keep)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $sample = Join-Path (Join-Path $root 'samples') 'collect'
@@ -57,12 +60,13 @@ function Get-Sub($parent, [string]$name) {
   foreach ($f in $parent.Folders) { if ($f.Name -eq $name) { return $f } }
   $f = New-Folder $name ($parent.FolderPath + '\' + $name); [void]$parent.Folders.Add($f); return $f
 }
-function New-Store([string]$name, [string]$file, [int]$exType = 0) {
+function New-Store([string]$name, [string]$file, [int]$exType = 0, [bool]$inboxId = $true) {
   $r = New-Folder '' ('\\' + $name)
   $st = [pscustomobject]@{ DisplayName = $name; FilePath = $file; ExchangeStoreType = $exType; StoreID = [guid]::NewGuid().ToString(); Root = $r; Defaults = @{} }
   $st | Add-Member -MemberType ScriptMethod -Name GetRootFolder -Value { return $this.Root }
   $st | Add-Member -MemberType ScriptMethod -Name GetDefaultFolder -Value { param($k) if ($this.Defaults.ContainsKey([int]$k)) { return $this.Defaults[[int]$k] } throw '기본 폴더 없음' }
   foreach ($d in @(@(3, '지운 편지함'), @(5, '보낸 편지함'), @(23, '정크 메일'))) { $st.Defaults[$d[0]] = Get-Sub $r $d[1] }
+  $in = Get-Sub $r '받은 편지함'; if ($inboxId) { $st.Defaults[6] = $in }      # 6 = olFolderInbox
   return $st
 }
 function New-Att([string]$name, [string]$src, [int]$type = 1, [bool]$hidden = $false, [int64]$size = -1) {
@@ -88,6 +92,7 @@ function New-Mail($m, [int]$class = 43, $atts = $null) {
 $online = New-Store 'me@example.com (가상)' 'C:\Users\user\AppData\Local\Microsoft\Outlook\me@example.com (가상).ost'
 $pst = New-Store 'Mail backup (가상)' 'D:\메일백업(가상)\Mail backup.pst'
 $public = New-Store '공용 폴더(가상)' '' 3
+$online2 = New-Store 'team@example.com (가상)' 'C:\Users\user\AppData\Local\Microsoft\Outlook\team@example.com (가상).ost' 0 $false   # 받은 편지함을 기본 폴더 번호로 못 찾는 계정
 [void](Get-Sub $online.Root '일정').Items                                       # 메일 폴더가 아님(아래에서 형식 바꿈)
 (Get-Sub $online.Root '일정').DefaultItemType = 1
 foreach ($m in $man.mails) {
@@ -108,34 +113,55 @@ $dupSrc = $man.mails | Where-Object { $_.id -eq 'M0006' }
 $f = Get-Sub (Get-Sub $pst.Root '2026') '캡 인테리어'; $f.Items.Add((New-Mail $dupSrc))            # Online 과 같은 메일(Message-ID 같음)
 $small = Join-Path ([IO.Path]::GetTempPath()) ('p27-logo-' + [guid]::NewGuid().ToString('N') + '.png'); [IO.File]::WriteAllBytes($small, [byte[]](1..200))
 $first = $man.mails[0]
-$m1 = (Get-Sub (Get-Sub $online.Root '받은 편지함') '캡 인테리어').Items | Where-Object { $_.Subject -eq $first.subject }
+$m1 = (Get-Sub $online.Root '받은 편지함').Items | Where-Object { $_.Subject -eq $first.subject }
 $m1.Attachments = @($m1.Attachments) + @((New-Att 'image001.png' (Join-Path $sample 'att/M0001/B안_렌더링_정면.png') 1 $true), (New-Att 'logo.png' $small))
 $extra = Clone-Mail $tmpl @{ messageId = 'fwd-1@example.com'; subject = '[팀 공지] 참고 메일 전달'; day = '2026-09-26'; time = '09:00' }
 (Get-Sub $online.Root '받은 편지함').Items.Add((New-Mail $extra 43 @((New-Att '회의 초대.msg' $null 5 $false 4096))))
 
-$ns = [pscustomobject]@{ Accounts = @([pscustomobject]@{ SmtpAddress = 'me@example.com' }); Stores = @($online, $pst, $public) }
+# Online폴더 시험용 메일: 받은 편지함 하위 폴더 · 다른 맨 위 폴더(기본 받은보낸 에서는 안 들어와야 함) · 두 번째 계정의 받은 편지함(들어와야 함)
+(Get-Sub (Get-Sub $online.Root '받은 편지함') '규칙으로 옮긴 메일').Items.Add((New-Mail (Clone-Mail $tmpl @{ messageId = 'sub-1@example.com'; subject = '받은 편지함 하위 폴더 메일' })))
+(Get-Sub $online.Root '프로젝트 보관').Items.Add((New-Mail (Clone-Mail $tmpl @{ messageId = 'top-1@example.com'; subject = '다른 폴더 메일' })))
+(Get-Sub $online2.Root '받은 편지함').Items.Add((New-Mail (Clone-Mail $tmpl @{ messageId = 'acc2-1@example.com'; subject = '두 번째 계정 받은 메일' })))
+(Get-Sub $online2.Root '받은 편지함').Items.Add((New-Mail (Clone-Mail $tmpl @{ messageId = 'acc2-old@example.com'; subject = '두 번째 계정 지난주 메일'; day = '2026-09-18' })))
+
+$ns = [pscustomobject]@{ Accounts = @([pscustomobject]@{ SmtpAddress = 'me@example.com' }); Stores = @($online, $pst, $public, $online2) }
 $ns | Add-Member -MemberType ScriptMethod -Name AddStoreEx -Value { param($p, $t) throw '시험에서는 .pst 를 열지 않습니다' }
 $ns | Add-Member -MemberType ScriptMethod -Name RemoveStore -Value { param($f) }
 
 # ── 수집기 실행 ──
 if (-not $OutDir) { $OutDir = Join-Path ([IO.Path]::GetTempPath()) ('p27-mock-' + [guid]::NewGuid().ToString('N')) }
 $settings = Join-Path ([IO.Path]::GetTempPath()) ('p27-set-' + [guid]::NewGuid().ToString('N') + '.txt')
-[IO.File]::WriteAllText($settings, [IO.File]::ReadAllText((Join-Path $root 'collector/수집설정.txt'), [Text.Encoding]::UTF8), [Text.Encoding]::UTF8)
+$setText = [IO.File]::ReadAllText((Join-Path $root 'collector/수집설정.txt'), [Text.Encoding]::UTF8)
+if ($setText -notmatch '(?m)^Online폴더=받은보낸\s*$') { throw '수집설정.txt 의 기본값이 Online폴더=받은보낸 이 아닙니다' }
+$setText = $setText -replace '(?m)^Online폴더=.*$', ('Online폴더=' + $OnlineScope)
+[IO.File]::WriteAllText($settings, $setText, [Text.Encoding]::UTF8)
 & (Join-Path $root 'collector/Collect-OutlookMail.ps1') -Mode weekly -Which this -RefDay 2026-09-24 -SettingsFile $settings -OutDir $OutDir -NoOpen -NoPause -MockNamespace $ns | Out-Host
 
 # ── 대조 ──
 $script:pass = 0; $script:fail = 0
 function Check([bool]$ok, [string]$label) { if ($ok) { $script:pass++; Write-Host ('  ok   ' + $label) } else { $script:fail++; Write-Host ('  FAIL ' + $label) -ForegroundColor Red } }
 $out = [IO.File]::ReadAllText((Join-Path $OutDir 'manifest.json'), [Text.Encoding]::UTF8) | ConvertFrom-Json
-Write-Host ('[가짜 Outlook 수집 · Restrict=' + $Restrict + '] 결과 대조')
+Write-Host ('[가짜 Outlook 수집 · Restrict=' + $Restrict + ' · Online폴더=' + $OnlineScope + '] 결과 대조')
 Check ($out.schema -eq 'p27-collect-v1' -and $out.period.start -eq '2026-09-21' -and $out.period.end -eq '2026-09-27') '형식 · 기간'
-Check (@($out.mails).Count -eq 8) ('메일 8통(예시 7 + 첨부 메일 1) — 실제 ' + @($out.mails).Count)
+# 예시 7 + 첨부 메일 1 + 두 번째 계정 1 = 9. 받은보낸하위 는 받은 편지함 하위 폴더 1통, 전체 는 거기에 다른 맨 위 폴더 1통을 더함
+$want = @{ '받은보낸' = 9; '받은보낸하위' = 10; '전체' = 11 }[$OnlineScope]
+Check (@($out.mails).Count -eq $want) ('메일 ' + $want + '통 — 실제 ' + @($out.mails).Count)
 Check ($out.duplicates -eq 1) ('Online · .pst 같은 메일 한 번만 — ' + $out.duplicates)
-Check (@($out.stores).Count -eq 2) '공용 폴더 데이터 파일은 읽지 않음'
+Check (@($out.stores).Count -eq 3) '공용 폴더 데이터 파일은 읽지 않음(Online 2 · .pst 1)'
+$scopeWant = @{ '받은보낸' = 'inbox-sent'; '받은보낸하위' = 'inbox-sent-sub'; '전체' = 'all' }[$OnlineScope]
+Check ((@($out.stores | Where-Object { $_.kind -eq 'online' } | ForEach-Object { $_.scope }) -join ',') -eq ($scopeWant + ',' + $scopeWant) -and (@($out.stores | Where-Object { $_.kind -eq 'pst' })[0].scope -eq 'all')) ('읽은 범위 표시: Online ' + $scopeWant + ' · .pst all')
+if ($OnlineScope -eq '받은보낸') {
+  $on = @($out.stores | Where-Object { $_.name -eq 'me@example.com (가상)' })[0]
+  Check ($on.folders -eq 2) ('Online 은 받은 편지함 · 보낸 편지함 2개만 — ' + $on.folders)
+}
 $sk = @($out.skippedFolders) -join ' | '
-foreach ($n in '지운 편지함', '정크 메일', '임시 보관함') { Check ($sk -like ('*' + $n + '*')) ('뺀 폴더: ' + $n) }
+Check ($sk -like '*Mail backup (가상)\지운 편지함*') '뺀 폴더: .pst 의 지운 편지함'
+if ($OnlineScope -eq '전체') { foreach ($n in '지운 편지함', '정크 메일', '임시 보관함') { Check ($sk -like ('*me@example.com (가상)\' + $n + '*')) ('뺀 폴더(Online 전체일 때): ' + $n) } }
 $subj = @($out.mails | ForEach-Object { $_.subject })
-foreach ($n in '지운 메일', '광고', '쓰다 만 메일', '지난주 메일', '회의 요청', '공용 폴더 글') { Check (-not ($subj -contains $n)) ('들어오면 안 되는 메일: ' + $n) }
+foreach ($n in '지운 메일', '광고', '쓰다 만 메일', '지난주 메일', '회의 요청', '공용 폴더 글', '두 번째 계정 지난주 메일') { Check (-not ($subj -contains $n)) ('들어오면 안 되는 메일: ' + $n) }
+Check ($subj -contains '두 번째 계정 받은 메일') '두 번째 계정의 받은 편지함(기본 폴더 번호가 없어 이름으로 찾음)'
+Check (($subj -contains '받은 편지함 하위 폴더 메일') -eq ($OnlineScope -ne '받은보낸')) ('받은 편지함 하위 폴더: ' + $(if ($OnlineScope -eq '받은보낸') { '안 읽음' } else { '읽음' }))
+Check (($subj -contains '다른 폴더 메일') -eq ($OnlineScope -eq '전체')) ('다른 맨 위 폴더: ' + $(if ($OnlineScope -eq '전체') { '읽음' } else { '안 읽음' }))
 if ($Restrict -eq 'empty') { Check ((@($out.warnings) -join ' ') -like '*Restrict*') 'Restrict 0 건 → 훑기로 대신했다는 알림' }
 foreach ($want in $man.mails) {
   $got = @($out.mails | Where-Object { $_.messageId -eq ('<' + $want.messageId + '>') })

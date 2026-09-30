@@ -6,10 +6,14 @@
   주간보고.bat · 월간보고.bat 가 이 파일을 실행합니다. 직접 실행할 필요는 없습니다.
 
   하는 일
-   1. 클래식 Outlook(COM)에 연결합니다. 인터넷·서버·Graph API 를 쓰지 않습니다.
+   1. 켜져 있는 클래식 Outlook(COM)에 붙습니다(Outlook 을 새로 띄우지 않음). 인터넷·서버·Graph API 를 쓰지 않습니다.
+      Outlook 이 꺼져 있으면 「Outlook 을 먼저 켜 주세요」라고 알리고 끝냅니다.
    2. Outlook 에 열려 있는 「모든 데이터 파일」을 읽습니다 — Online 사서함(회사 메일 계정)과 .pst(Local 백업).
       수집설정.txt 의 PST폴더 를 적으면 그 폴더의 .pst 중 Outlook 에 안 열린 것을 잠깐 열었다가 끝나면 닫습니다.
-   3. 모든 메일 폴더를 돌며(보낸 편지함 포함, 지운 편지함 · 정크 메일 · 설정한 제외폴더 제외) 기간 안의 메일만 고릅니다.
+   3. Online 사서함은 받은 편지함 · 보낸 편지함 두 폴더만 읽습니다(수집설정.txt 의 Online폴더 — 2026-09-30 답변).
+      Outlook 의 기본 폴더 번호로 찾으므로 영어 · 한국어 Outlook 모두 같습니다.
+      .pst 는 모든 메일 폴더 · 하위 폴더를 읽습니다(지운 편지함 · 정크 메일 · 설정한 제외폴더 제외).
+      두 경우 모두 기간 안의 메일만 고릅니다.
       같은 메일이 Online 과 .pst 에 둘 다 있으면(Message-ID 가 같으면) 한 번만 담습니다.
    4. 메일마다 제목 · 보낸이 · 받는이 · 날짜 · 본문, 첨부 파일을 저장하고 첨부 글을 뽑습니다(내 PC 안에서만).
         워드 · 파워포인트 · 엑셀(.docx .pptx .xlsx) → 파일 안 XML 을 바로 읽어 글 뽑기(Office 를 띄우지 않음)
@@ -58,6 +62,7 @@ $ErrorActionPreference = 'Stop'
 $olMail = 43                  # OlObjectClass.olMail — 회의 요청 · 배달 보고 등은 건너뜀
 $olFolderDeletedItems = 3
 $olFolderSentMail = 5
+$olFolderInbox = 6
 $olFolderJunk = 23
 $olExchangePublicFolder = 3   # OlExchangeStoreType — 공용 폴더는 읽지 않음
 $olStoreUnicode = 3
@@ -127,11 +132,20 @@ $smallImgKB = 15; [void][int]::TryParse($S['작은그림KB'], [ref]$smallImgKB)
 $pdfBudgetMB = 60; [void][int]::TryParse($S['PDF포함MB'], [ref]$pdfBudgetMB)
 $keepFiles = ($S['첨부저장'] -ne '아니오')
 $skipNames = Get-SkipFolderNames $S
+$OS = Get-OnlineScope $S; $onlineScope = $OS.scope
+if (-not $OS.ok) { Say ('수집설정.txt 의 Online폴더 값(' + $S['Online폴더'] + ')을 몰라 기본값(받은보낸 = 받은 편지함 · 보낸 편지함만)으로 읽습니다.') 'Yellow' }
 
-# ── 2. Outlook 연결 ───────────────────────────
+# ── 2. Outlook 연결 — 켜져 있는 Outlook 에 붙습니다(2026-09-30 답변: 늘 켜 둠) ──
+# Outlook 이 꺼져 있으면 새로 띄우지 않고 알립니다. 수집기가 몰래 띄운 Outlook 은 화면에 안 보여 사용자가 끄기 어렵기 때문입니다.
+if (-not $MockNamespace -and -not (Get-Process -Name 'OUTLOOK' -ErrorAction SilentlyContinue)) {
+  Stop-WithMessage ("Outlook 이 꺼져 있습니다.`n" +
+    " - 평소처럼 클래식 Outlook 을 켜고, 왼쪽에 받은 편지함과 .pst(데이터 파일)가 보이면 이 창을 닫고 다시 실행해 주세요.`n" +
+    " - 이 도구는 Outlook 이 설치되고 회사 계정으로 로그인된 이 PC 에서만 메일을 읽을 수 있습니다.")
+}
 try {
   if ($MockNamespace) { $ns = $MockNamespace }
   else {
+    # 켜진 Outlook 에 붙기. (GetActiveObject 가 안 되는 환경에서는 New-Object 가 켜진 Outlook 을 돌려줍니다 — 위에서 켜져 있는 것을 확인함)
     try { $ol = [Runtime.InteropServices.Marshal]::GetActiveObject('Outlook.Application') }
     catch { $ol = New-Object -ComObject Outlook.Application }
     $ns = $ol.GetNamespace('MAPI')
@@ -196,6 +210,25 @@ function Get-ItemsInRange($folder, [string]$field, [datetime]$from, [datetime]$t
   return , $list
 }
 
+<# Online 사서함: 받은 편지함 · 보낸 편지함(기본 폴더 번호 6 · 5 — 언어와 상관없음). 받은보낸하위 면 그 하위 폴더도.
+   기본 폴더를 못 찾으면(드물게 권한 · 추가 사서함) 맨 위 폴더 이름으로 한 번 더 찾습니다. #>
+function Get-OnlineFolders($st, $root, [string]$scope, $skipIds, [string[]]$names, $acc, $skipped) {
+  $found = @()
+  foreach ($k in @($olFolderInbox, $olFolderSentMail)) {
+    $f = $null; try { $f = $st.GetDefaultFolder($k) } catch { $f = $null }
+    if ($null -eq $f) {
+      $want = @('받은 편지함', 'Inbox'); if ($k -eq $olFolderSentMail) { $want = @('보낸 편지함', 'Sent Items') }
+      foreach ($c in $root.Folders) { if ($want -contains [string]$c.Name) { $f = $c; break } }
+    }
+    if ($null -ne $f) { $found += , $f }
+  }
+  foreach ($f in $found) {
+    $acc.Add($f) | Out-Null
+    if ($scope -eq 'inbox-sent-sub') { Get-MailFolders $f $skipIds $names $acc $skipped }
+  }
+  return $found.Count
+}
+
 $Script:restrictFallback = 0
 $stores = @(); $skippedFolders = New-Object System.Collections.ArrayList
 $targets = New-Object System.Collections.ArrayList
@@ -207,13 +240,19 @@ foreach ($st in $ns.Stores) {
   $skipIds = @((Get-DefaultId $st $olFolderDeletedItems), (Get-DefaultId $st $olFolderJunk)) | Where-Object { $_ }
   $sentId = Get-DefaultId $st $olFolderSentMail
   $folders = New-Object System.Collections.ArrayList
-  Get-MailFolders $root $skipIds $skipNames $folders $skippedFolders
-  $info = [ordered]@{ name = [string]$st.DisplayName; kind = $kind; path = $path; folders = $folders.Count; mails = 0; added = [bool]($added | Where-Object { $_.StoreID -eq $st.StoreID }) }
+  $scope = 'all'
+  if ($kind -eq 'online' -and $onlineScope -ne 'all') {
+    $scope = $onlineScope
+    if ((Get-OnlineFolders $st $root $scope $skipIds $skipNames $folders $skippedFolders) -eq 0) { Say ('  받은 편지함 · 보낸 편지함을 찾지 못해 건너뜁니다: ' + $st.DisplayName) 'Yellow' }
+  } else { Get-MailFolders $root $skipIds $skipNames $folders $skippedFolders }
+  $info = [ordered]@{ name = [string]$st.DisplayName; kind = $kind; path = $path; scope = $scope; folders = $folders.Count; mails = 0; added = [bool]($added | Where-Object { $_.StoreID -eq $st.StoreID }) }
   $stores += , $info
   foreach ($f in $folders) { [void]$targets.Add(@{ store = $info; folder = $f; sent = ([string]$f.EntryID -eq $sentId -or @('보낸 편지함', 'Sent Items') -contains [string]$f.Name) }) }
 }
 Say ('데이터 파일 ' + $stores.Count + '개 · 메일 폴더 ' + $targets.Count + '개를 읽습니다. (뺀 폴더 ' + $skippedFolders.Count + '개: 지운 편지함 · 정크 메일 · 제외폴더)')
-foreach ($s in $stores) { $k = 'Online 사서함'; if ($s.kind -eq 'pst') { $k = 'Local(.pst)' }; Say ('  - ' + $k + ' : ' + $s.name + ' (폴더 ' + $s.folders + '개)') }
+$scopeKo = @{ 'inbox-sent' = '받은 편지함 · 보낸 편지함만'; 'inbox-sent-sub' = '받은 편지함 · 보낸 편지함과 하위 폴더'; 'all' = '모든 메일 폴더' }
+foreach ($s in $stores) { $k = 'Online 사서함'; if ($s.kind -eq 'pst') { $k = 'Local(.pst)' }; Say ('  - ' + $k + ' : ' + $s.name + ' (폴더 ' + $s.folders + '개 · ' + $scopeKo[$s.scope] + ')') }
+if ($ListOnly) { foreach ($t in $targets) { Say ('      ' + ([string]$t.folder.FolderPath -replace '^\\\\', '')) } }
 
 # ── 5. 저장 폴더 ──────────────────────────────
 if (-not $OutDir) {
@@ -327,7 +366,7 @@ $json = ConvertTo-JsonText $manifest
 [IO.File]::WriteAllText((Join-Path $OutDir 'manifest.js'), ('window.P27_COLLECT = ' + $json + ";`n"), $Utf8)
 [IO.File]::WriteAllText((Join-Path $OutDir 'pdfdata.js'), ('window.P27_PDF = ' + (ConvertTo-JsonText $pdfData) + ";`n"), $Utf8)
 $log = @('업무보고 자동수집 기록', ('기간: ' + $modeKo + ' ' + $P.start + ' ~ ' + $P.end), ('만든 때: ' + $manifest.generatedAt), '')
-foreach ($s in $stores) { $log += ('데이터 파일: ' + $s.name + ' [' + $s.kind + '] ' + $s.path + ' — 메일 ' + $s.mails + '통') }
+foreach ($s in $stores) { $log += ('데이터 파일: ' + $s.name + ' [' + $s.kind + '] ' + $s.path + ' — ' + $scopeKo[$s.scope] + ' — 메일 ' + $s.mails + '통') }
 $log += ''; $log += ('뺀 폴더: ' + (@($skippedFolders) -join ', ')); $log += ('같은 메일 한 번만: ' + $dup + '통'); $log += @($warnings)
 [IO.File]::WriteAllText((Join-Path $OutDir '수집기록.txt'), ($log -join "`r`n"), (New-Object System.Text.UTF8Encoding($true)))
 

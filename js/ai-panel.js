@@ -65,9 +65,10 @@
         status.lastChild.textContent = '연결됨 — 서버 답: ' + t.slice(0, 80);
       }, function (e) { status.lastChild.textContent = e.message; status.lastChild.className = 'alert warn'; });
     }
-    return h('section', { class: 'card', id: 'aiSettings' }, h('h2', null, 'AI 연결 설정 (선택 — 자동 보내기)'),
-      h('p', { class: 'note' }, '기본은 반자동입니다(프롬프트 복사 → 회사가 허용한 AI 에 붙여 넣기 → 답 붙여 넣기). ' +
-        '사내 온프레미스 LLM 이 「OpenAI 호환 API」(주소가 보통 …/v1 로 끝남)를 열어 두었다면 여기 주소·모델을 적어 버튼 한 번으로 보낼 수 있습니다. ' +
+    return h('section', { class: 'card', id: 'aiSettings' }, h('h2', null, 'AI 연결 설정 (사내 LLM 권장 — 자동 보내기)'),
+      h('p', { class: 'note' }, '회사에 사내 LLM 이 있으면 이 방법을 권합니다. 메일 내용이 사내망 밖으로 나가지 않습니다. ' +
+        '사내 LLM 이 「OpenAI 호환 API」(주소가 보통 …/v1 로 끝남)를 열어 두었다면 여기 주소·모델 이름을 적어 버튼 한 번으로 보낼 수 있습니다. 주소 · 모델 이름은 사내 IT(또는 LLM 담당)에 물어 주세요. 키는 이 칸에만 적고 코드 · 파일에는 남기지 않습니다. ' +
+        '설정하지 않으면 반자동(프롬프트 복사 → 회사가 허용한 AI 에 붙여 넣기 → 답 붙여 넣기)으로 씁니다. ' +
         'vLLM·Ollama 같은 오픈소스 서버는 이런 호환 API 를 제공합니다.'),
       h('div', { class: 'form-grid' },
         fld('서버 종류', preset),

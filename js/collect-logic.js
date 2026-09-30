@@ -184,7 +184,7 @@
   }
 
   /* ── 수집 설정 파일(collector/수집설정.txt) — 「이름=값」 줄, # 은 설명 ── */
-  var SETTING_DEFAULTS = { 'PST폴더': '', '제외폴더': '', '저장위치': '', '첨부최대MB': '30', '작은그림KB': '15', '최대메일수': '5000', '주시작': '월', '첨부저장': '예', 'PDF포함MB': '60' };
+  var SETTING_DEFAULTS = { 'Online폴더': '받은보낸', 'PST폴더': '', '제외폴더': '', '저장위치': '', '첨부최대MB': '30', '작은그림KB': '15', '최대메일수': '5000', '주시작': '월', '첨부저장': '예', 'PDF포함MB': '60' };
   function parseSettingsText(text) {
     var out = {}, unknown = [];
     Object.keys(SETTING_DEFAULTS).forEach(function (k) { out[k] = SETTING_DEFAULTS[k]; });
@@ -196,6 +196,14 @@
     });
     out._unknown = unknown;
     return out;
+  }
+  /* Online 사서함에서 읽을 범위 (collector/CollectorCore.ps1 의 Get-OnlineScope 와 같은 표) — 2026-09-30 답변: 받은 · 보낸 편지함만
+     받은보낸(기본) = 두 폴더만 · 받은보낸하위 = 두 폴더와 하위 폴더 · 전체 = 모든 메일 폴더. 모르는 값이면 기본값 + ok:false */
+  var ONLINE_SCOPE = { '': 'inbox-sent', '받은보낸': 'inbox-sent', '받은보낸하위': 'inbox-sent-sub', '전체': 'all' };
+  var SCOPE_LABEL = { 'inbox-sent': '받은 편지함 · 보낸 편지함만', 'inbox-sent-sub': '받은 편지함 · 보낸 편지함과 그 하위 폴더', 'all': '모든 메일 폴더' };
+  function onlineScope(settings) {
+    var v = str(settings && settings['Online폴더']).replace(/[\s·,，+]/g, '');
+    return Object.prototype.hasOwnProperty.call(ONLINE_SCOPE, v) ? { scope: ONLINE_SCOPE[v], ok: true } : { scope: 'inbox-sent', ok: false };
   }
   /* 늘 빼는 폴더(지운 편지함 · 정크) + 설정의 제외폴더 */
   var ALWAYS_SKIP = ['지운 편지함', 'Deleted Items', '정크 메일', '정크 전자 메일', 'Junk Email', 'Junk E-mail'];
@@ -262,7 +270,7 @@
     });
     return {
       period: m.period, generatedAt: str(m.generatedAt), computer: str(m.computer),
-      stores: (m.stores || []).map(function (s) { return { name: str(s.name), kind: s.kind === 'pst' ? 'pst' : 'online', path: str(s.path), mails: +s.mails || 0, added: !!s.added }; }),
+      stores: (m.stores || []).map(function (s) { return { name: str(s.name), kind: s.kind === 'pst' ? 'pst' : 'online', path: str(s.path), mails: +s.mails || 0, added: !!s.added, scope: SCOPE_LABEL[s.scope] ? s.scope : '' }; }),
       mails: m.mails.length, sent: m.mails.filter(function (x) { return x.direction === 'sent'; }).length,
       online: byStore.online || 0, pst: byStore.pst || 0, attachments: att,
       skippedFolders: (m.skippedFolders || []).map(str), duplicates: +m.duplicates || 0, warnings: (m.warnings || []).map(str)
@@ -382,7 +390,7 @@
     extOf: extOf, kindOf: kindOf, isDeliverable: isDeliverable, decodeXml: decodeXml,
     docxXmlToText: docxXmlToText, pptxSlidesToText: pptxSlidesToText, xlsxShared: xlsxShared, xlsxSheetList: xlsxSheetList,
     xlsxSheetToLines: xlsxSheetToLines, xlsxToText: xlsxToText, ooxmlTextFromZip: ooxmlTextFromZip, pdfPagesToText: pdfPagesToText,
-    SETTING_DEFAULTS: SETTING_DEFAULTS, parseSettingsText: parseSettingsText, ALWAYS_SKIP: ALWAYS_SKIP, skipFolderNames: skipFolderNames,
+    SETTING_DEFAULTS: SETTING_DEFAULTS, parseSettingsText: parseSettingsText, onlineScope: onlineScope, SCOPE_LABEL: SCOPE_LABEL, ALWAYS_SKIP: ALWAYS_SKIP, skipFolderNames: skipFolderNames,
     parseManifest: parseManifest, mailsFromManifest: mailsFromManifest, collectSummary: collectSummary, slimForState: slimForState,
     pendingBrowserReads: pendingBrowserReads, looksPdf: looksPdf,
     attachmentItems: attachmentItems, releaseDateOf: releaseDateOf, applyReleaseDates: applyReleaseDates,

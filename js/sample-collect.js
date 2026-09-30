@@ -21,7 +21,8 @@
     "name": "me@example.com (가상)",
     "kind": "online",
     "path": "C:\\Users\\user\\AppData\\Local\\Microsoft\\Outlook\\me@example.com (가상).ost",
-    "folders": 9,
+    "scope": "inbox-sent",
+    "folders": 2,
     "mails": 5,
     "added": false
    },
@@ -29,15 +30,13 @@
     "name": "Mail backup (가상)",
     "kind": "pst",
     "path": "D:\\메일백업(가상)\\Mail backup.pst",
+    "scope": "all",
     "folders": 24,
     "mails": 2,
     "added": false
    }
   ],
   "skippedFolders": [
-   "\\\\me@example.com (가상)\\지운 편지함",
-   "\\\\me@example.com (가상)\\정크 메일",
-   "\\\\me@example.com (가상)\\임시 보관함",
    "\\\\Mail backup (가상)\\지운 편지함"
   ],
   "duplicates": 1,
@@ -47,7 +46,7 @@
     "id": "M0001",
     "store": "me@example.com (가상)",
     "storeKind": "online",
-    "folder": "받은 편지함\\캡 인테리어",
+    "folder": "받은 편지함",
     "direction": "received",
     "messageId": "cab-101@example.com",
     "inReplyTo": "",
@@ -248,7 +247,7 @@
     "id": "M0006",
     "store": "me@example.com (가상)",
     "storeKind": "online",
-    "folder": "받은 편지함\\캡 인테리어",
+    "folder": "받은 편지함",
     "direction": "received",
     "messageId": "cab-103@example.com",
     "inReplyTo": "",

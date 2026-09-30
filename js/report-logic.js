@@ -4,6 +4,8 @@
    ③ 양식 표의 결과물 배포일은 항목의 releaseDate(첨부로 찾은 배포일)를 먼저 쓴다 ④ 결과물 이미지에 일러스트(.ai)도 넣는다
    ⑤ 첨부에서 뽑은 항목은 「첨부 근거」로 표시한다 ⑥ parseEml(…, { keepBytes: true }) 이면 첨부 바이트를 남긴다(직접 넣은 .eml 의 첨부 글 뽑기)
    ⑦ 저장 형태에 마지막 자동 수집 요약(collect)을 둔다
+   ⑧ (2026-09-30 답변) 보고 단계(settings.level: 팀원 · 파트리더 · 팀장 · 임원)와 취합 상태(rollup)를 저장한다.
+      보고서에 rep.sections 가 있으면 그 절 순서를 쓰고, 「보고자별 취합 현황」(sources) 절을 그린다 — 취합 로직은 js/rollup-logic.js
    원래 설명(과제 B):
    흐름(제출 기획서 5.1): 보고 기간 설정 → 메일 수집(.eml 파싱) → 업무 단위 그룹핑 → 실적·계획·이슈 분류
    → 이전 보고서 계획과 비교 → 근거가 붙은 보고서 초안 → 사용자 검토·승인 → Word·Excel·인쇄
@@ -970,7 +972,21 @@
       }).join('') + '</ul>';
     }).join('');
   }
+  function sectionsOf(rep) { return rep.sections || SECTIONS[rep.type] || SECTIONS.weekly; }
+  /* data09-27: 취합 보고서의 「보고자별 취합 현황」 표 — 줄 = 받은 보고서 한 개 */
+  var SOURCE_HEAD = ['보고자', '단계 · 보고 단위', '실적', '계획', '이슈', '확인 필요', '상태'];
+  function sourceRow(s) {
+    return [s.author + (s.own ? ' (나)' : '') + (s.rollup && s.reporters.length ? ' — ' + s.reporters.length + '명 취합: ' + s.reporters.join(', ') : ''),
+      s.level + (s.unit ? ' · ' + s.unit : ''), String(s.counts.performance), String(s.counts.plan), String(s.counts.issue), String(s.counts.check),
+      s.approved ? '승인 ' + s.approved : '초안(승인 전)'];
+  }
   function sectionHtml(rep, id, opts) {
+    if (id === 'sources') {
+      if (!(rep.sources || []).length) return '<p class="meta">취합한 보고서가 없습니다.</p>';
+      return '<table><tr>' + SOURCE_HEAD.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '</tr>' + rep.sources.map(function (s) {
+        return '<tr>' + sourceRow(s).map(function (x) { return '<td>' + esc(x) + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</table><p class="meta">항목 문장 앞의 [이름]이 그 항목을 보고한 사람입니다. 근거 메일 ID 는 「보고자·메일ID」입니다. 확인 필요 표시는 보고자가 붙인 그대로입니다.</p>';
+    }
     if (id === 'board') {
       var bd = boardOf(rep);
       if (!bd.rows.length) return '<p class="meta">해당 항목이 없습니다.</p>';
@@ -1011,7 +1027,7 @@
   }
   function reportBodyHtml(rep, opts) {
     opts = opts || {};
-    var secs = SECTIONS[rep.type] || SECTIONS.weekly;
+    var secs = sectionsOf(rep);
     var h = '<div class="rp"><h1>' + esc(reportTitle(rep)) + '</h1><p class="meta">' +
       (rep.author ? '작성: ' + esc(rep.author) + ' · ' : '') + (rep.generated ? '생성: ' + esc(rep.generated) + ' · ' : '') +
       (rep.approved ? '승인: ' + esc(rep.approved) : '<span class="draft">초안 — 검토·승인 전</span>') + '</p>';
@@ -1070,9 +1086,10 @@
   function docxBody(rep) {
     var out = [wPara(wRun(reportTitle(rep), { b: true, sz: 36 })),
       wPara(wRun((rep.author ? '작성: ' + rep.author + ' · ' : '') + (rep.generated ? '생성: ' + rep.generated + ' · ' : '') + (rep.approved ? '승인: ' + rep.approved : '초안 — 검토·승인 전'), { sz: 18, color: rep.approved ? '56616F' : 'B3261E' }))];
-    (SECTIONS[rep.type] || SECTIONS.weekly).forEach(function (s) {
+    sectionsOf(rep).forEach(function (s) {
       out.push(wPara(wRun(s.name, { b: true, sz: 26 }), { spaceBefore: 280, border: true }));
-      if (s.id === 'summary') rep.summary.forEach(function (t) { out.push(wPara(wRun('• ' + t), { indent: 360 })); });
+      if (s.id === 'sources') out.push((rep.sources || []).length ? wTable(SOURCE_HEAD, rep.sources.map(sourceRow)) : wPara(wRun('취합한 보고서가 없습니다.', { color: '56616F' })));
+      else if (s.id === 'summary') rep.summary.forEach(function (t) { out.push(wPara(wRun('• ' + t), { indent: 360 })); });
       else if (s.id === 'board') { var bd = boardOf(rep); out.push(bd.rows.length ? wTable(bd.head, bd.rows.map(function (r) { return [r.group || '-', r.project, boardCellLines(r, 'perf'), boardCellLines(r, 'plan').concat(r.evidence.length ? ['근거 ' + r.evidence.join(', ')] : [])]; })) : wPara(wRun('해당 항목이 없습니다.', { color: '56616F' }))); }
       else if (s.id === 'performance') out = out.concat(docxItems(rep.performance));
       else if (s.id === 'plan') { if (rep.period) out.push(wPara(wRun('대상 기간: ' + rep.period.next.label, { sz: 18, color: '56616F' }))); out = out.concat(docxItems(rep.plan)); }
@@ -1123,8 +1140,10 @@
   }
 
   /* ── 저장 형태 ───────────────────────── */
+  /* data09-27: 보고서 취합 — 받은 보고서 파일(rollup-logic.parsePackage 결과)과 내 메일 보고서 넣기 여부 */
+  function emptyRollup() { return { sources: [], includeOwn: false, approved: null }; }
   function emptyState() {
-    return { schema: SCHEMA_VERSION, settings: { type: 'weekly', refDay: '', weekStart: 1, author: '', title: '', boardStyle: 'brief' }, projects: [], mails: [], items: [], prevPlansText: '', carryFinal: {}, taskProject: {}, history: [], summaryOverride: '', approved: null, collect: null, _sample: false };
+    return { schema: SCHEMA_VERSION, settings: { type: 'weekly', refDay: '', weekStart: 1, author: '', title: '', boardStyle: 'brief', level: '팀원' }, projects: [], mails: [], items: [], prevPlansText: '', carryFinal: {}, taskProject: {}, history: [], summaryOverride: '', approved: null, collect: null, rollup: emptyRollup(), _sample: false };
   }
   function restoreState(p) {
     var s = emptyState();
@@ -1142,6 +1161,10 @@
     s.history = Array.isArray(p.history) ? p.history.filter(function (h) { return h && h.period; }) : [];
     s._sample = !!p._sample;
     if (p.collect && typeof p.collect === 'object') s.collect = p.collect;   // data09-27: 마지막 자동 수집 요약
+    if (['팀원', '파트리더', '팀장', '임원'].indexOf(s.settings.level) < 0) s.settings.level = '팀원';
+    if (p.rollup && typeof p.rollup === 'object' && Array.isArray(p.rollup.sources)) {
+      s.rollup = { sources: p.rollup.sources.filter(function (x) { return x && x.author && x.period && Array.isArray(x.items); }), includeOwn: !!p.rollup.includeOwn, approved: typeof p.rollup.approved === 'string' ? p.rollup.approved : null };
+    }
     return s;
   }
   /* 승인한 보고서 → 이력 1건. 다음 보고 때 「이전 보고서 계획」으로 쓴다 */
@@ -1161,7 +1184,7 @@
 
   return {
     SCHEMA_VERSION: SCHEMA_VERSION, CATEGORIES: CATEGORIES, CATEGORY_EN: CATEGORY_EN, STATUSES: STATUSES, ORIGINS: ORIGINS,
-    REPORT_TYPES: REPORT_TYPES, SECTIONS: SECTIONS, OTHER_PROJECT: OTHER_PROJECT, RULES: RULES, REPORT_CSS: REPORT_CSS,
+    REPORT_TYPES: REPORT_TYPES, SECTIONS: SECTIONS, OTHER_PROJECT: OTHER_PROJECT, dateSpan: dateSpan, RULES: RULES, REPORT_CSS: REPORT_CSS,
     esc: esc, normCharset: normCharset, binToBytes: binToBytes, bytesToBin: bytesToBin, decodeBytes: decodeBytes,
     base64ToBytes: base64ToBytes, bytesToBase64: bytesToBase64, qpToBytes: qpToBytes, decodeWords: decodeWords, decodeHeaderValue: decodeHeaderValue,
     parseHeaders: parseHeaders, parseParams: parseParams, parseAddressList: parseAddressList, parseMailDate: parseMailDate,
@@ -1176,6 +1199,6 @@
     buildReport: buildReport, reportTitle: reportTitle, flagText: flagText, reportBodyHtml: reportBodyHtml, reportWordHtml: reportWordHtml, reportHtml: reportHtml,
     docxParts: docxParts, reportSheets: reportSheets,
     BOARD_LABELS: BOARD_LABELS, boardStyle: boardStyle, workdayRange: workdayRange, weeklyBoard: weeklyBoard, boardCellLines: boardCellLines, boardOf: boardOf,
-    emptyState: emptyState, restoreState: restoreState, historyEntry: historyEntry, plansFromHistory: plansFromHistory
+    emptyState: emptyState, emptyRollup: emptyRollup, restoreState: restoreState, sectionsOf: sectionsOf, historyEntry: historyEntry, plansFromHistory: plansFromHistory
   };
 });

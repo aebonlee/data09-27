@@ -262,6 +262,33 @@ test('Outlook 폴더 고르기: 보낸 편지함은 보낸 날짜(SentOn)로, �
   assert.ok(collector.includes('.Restrict($filter)'));
   assert.ok(collector.includes("$items.Sort('[' + $field + ']', $true)"));            // Restrict 가 날짜 형식 탓에 0 건일 때 대신 훑기
 });
+test('Online 사서함 범위(2026-09-30 답변): 기본은 받은 편지함 · 보낸 편지함만, 기본 폴더 번호(6 · 5)로 찾음, .pst 는 모든 폴더', () => {
+  const setText = readFileSync(path.join(ROOT, 'collector/수집설정.txt'), 'utf8');
+  assert.match(setText, /^Online폴더=받은보낸\r?$/m);
+  const s = C.parseSettingsText(setText);
+  assert.deepEqual(s._unknown, []);
+  assert.deepEqual(C.onlineScope(s), { scope: 'inbox-sent', ok: true });
+  assert.deepEqual(C.onlineScope({}), { scope: 'inbox-sent', ok: true });
+  assert.deepEqual(C.onlineScope({ 'Online폴더': '받은 · 보낸' }), { scope: 'inbox-sent', ok: true });
+  assert.deepEqual(C.onlineScope({ 'Online폴더': '받은보낸하위' }), { scope: 'inbox-sent-sub', ok: true });
+  assert.deepEqual(C.onlineScope({ 'Online폴더': '전체' }), { scope: 'all', ok: true });
+  assert.deepEqual(C.onlineScope({ 'Online폴더': '모두' }), { scope: 'inbox-sent', ok: false });   // 모르는 값 → 기본 + 알림
+  assert.ok(core.includes("'Online폴더' = '받은보낸'") && core.includes("'받은보낸하위' { return @{ scope = 'inbox-sent-sub'"));
+  assert.ok(collector.includes('$olFolderInbox = 6') && collector.includes('$olFolderSentMail = 5'));
+  assert.ok(collector.includes('foreach ($k in @($olFolderInbox, $olFolderSentMail))') && collector.includes('$st.GetDefaultFolder($k)'));
+  assert.ok(collector.includes("if ($kind -eq 'online' -and $onlineScope -ne 'all')"));   // .pst 는 이 조건에 안 걸려 모든 폴더
+  // 예시 수집 결과도 같은 모양: Online 메일은 받은 · 보낸 편지함에만, 범위 표시
+  const on = S.manifest.stores.find((x) => x.kind === 'online'), pst = S.manifest.stores.find((x) => x.kind === 'pst');
+  assert.equal(on.scope, 'inbox-sent'); assert.equal(pst.scope, 'all');
+  assert.deepEqual([...new Set(S.manifest.mails.filter((m) => m.storeKind === 'online').map((m) => m.folder))].sort(), ['받은 편지함', '보낸 편지함']);
+  assert.equal(C.collectSummary(S.manifest).stores[0].scope, 'inbox-sent');
+});
+test('Outlook 은 켜져 있는 것에 붙고, 꺼져 있으면 새로 띄우지 않고 알린다(2026-09-30 답변: 늘 켜 둠)', () => {
+  const code = collector.replace(/<#[\s\S]*?#>/g, '');
+  const check = code.indexOf("Get-Process -Name 'OUTLOOK'"), make = code.indexOf('New-Object -ComObject Outlook.Application');
+  assert.ok(check > 0 && make > check, '켜져 있는지 먼저 확인한 뒤에만 New-Object');
+  assert.ok(code.includes('Outlook 이 꺼져 있습니다.'));
+});
 test('수집기 자가검사(Test-Collector.ps1)가 이 폴더의 예시 파일 · .txt 와 대조한다', () => {
   const t = readFileSync(path.join(ROOT, 'collector/Test-Collector.ps1'), 'utf8');
   assert.ok(t.includes('samples\\collect') || t.includes("'samples'"));
@@ -274,7 +301,9 @@ const PWSH = process.env.PWSH || ['pwsh', 'powershell'].find((c) => spawnSync(c,
 if (PWSH) {
   for (const [label, file, args] of [['수집기 자가검사(Test-Collector.ps1)', 'collector/Test-Collector.ps1', []],
     ['가짜 Outlook 수집 — Restrict 가 0 건일 때 훑기(Run-MockCollect.ps1)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'empty']],
-    ['가짜 Outlook 수집 — Restrict 로 거르기', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok']]]) {
+    ['가짜 Outlook 수집 — Restrict 로 거르기', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok']],
+    ['가짜 Outlook 수집 — Online폴더=받은보낸하위(하위 폴더까지)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok', '-OnlineScope', '받은보낸하위']],
+    ['가짜 Outlook 수집 — Online폴더=전체(모든 메일 폴더)', 'test/pwsh/Run-MockCollect.ps1', ['-Restrict', 'ok', '-OnlineScope', '전체']]]) {
     test('PowerShell: ' + label, () => {
       const r = spawnSync(PWSH, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(ROOT, file)].concat(args), { encoding: 'utf8', cwd: ROOT });
       const tail = (r.stdout || '').trim().split('\n').slice(-1)[0];
